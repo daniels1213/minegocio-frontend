@@ -79,7 +79,7 @@ async function loadCatalogs() {
 
   try {
     catalogs.value =
-      await api.catalogosPublicos<Catalogo>()
+      await api.catalogosTodos<Catalogo>()
   } catch (reason) {
     error.value =
       reason instanceof Error
