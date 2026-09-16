@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { Search, Package, Store, Shield, Tag } from 'lucide-vue-next'
-import { api, type Catalogo } from '../../api'
+import LoginModal from '../../components/LoginModal.vue'
+import { api, setCredentials, type Catalogo, type Usuario } from '../../api'
 
 const emit = defineEmits<{
-  (e: 'open-login'): void
+  (e: 'authenticated'): void
 }>()
 
 const catalogs = ref<Catalogo[]>([])
@@ -12,6 +13,11 @@ const search = ref('')
 const selectedTags = ref<string[]>([])
 const loading = ref(false)
 const error = ref('')
+const showLoginModal = ref(false)
+const username = ref('')
+const password = ref('')
+const loginError = ref('')
+const loginLoading = ref(false)
 
 const normalizedCatalogs = computed(() => {
   return catalogs.value.map((catalog) => {
@@ -94,7 +100,38 @@ async function loadCatalogs() {
 }
 
 function openLogin() {
-  emit('open-login')
+  loginError.value = ''
+  showLoginModal.value = true
+}
+
+function closeLogin() {
+  showLoginModal.value = false
+  loginError.value = ''
+}
+
+async function submitLogin() {
+  const trimmedUsername = username.value.trim()
+
+  if (!trimmedUsername || !password.value.trim()) {
+    loginError.value = 'Debes ingresar usuario y contraseña.'
+    return
+  }
+
+  loginLoading.value = true
+  loginError.value = ''
+
+  try {
+    setCredentials(trimmedUsername, password.value)
+    await api.me<Usuario>()
+    showLoginModal.value = false
+    emit('authenticated')
+  } catch (reason) {
+    loginError.value = reason instanceof Error
+      ? reason.message
+      : 'No se pudo iniciar sesión.'
+  } finally {
+    loginLoading.value = false
+  }
 }
 
 function addCatalog() {
@@ -435,6 +472,18 @@ onMounted(() => {
     </footer>
 
   </div>
+
+  <LoginModal
+    :visible="showLoginModal"
+    :loading="loginLoading"
+    :error="loginError"
+    :username="username"
+    :password="password"
+    @close="closeLogin"
+    @submit="submitLogin"
+    @update:username="username = $event"
+    @update:password="password = $event"
+  />
 </template>
 
 
