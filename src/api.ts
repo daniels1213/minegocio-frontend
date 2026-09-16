@@ -30,7 +30,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 			},
 		})
 	} catch {
-		throw new Error('No se puede conectar con el backend en http://localhost:8080')
+		throw new Error('No se puede conectar con el backend')
 	}
 
 	if (!response.ok) {
