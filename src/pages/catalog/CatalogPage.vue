@@ -1,41 +1,85 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { Search, Package, Store } from 'lucide-vue-next'
+import { Search, Package, Store, Shield, Tag } from 'lucide-vue-next'
 import { api, type Catalogo } from '../../api'
 
 const catalogs = ref<Catalogo[]>([])
 const search = ref('')
+const selectedTags = ref<string[]>([])
 const loading = ref(false)
 const error = ref('')
 
-const normalizedCatalogs = computed(() =>
-  catalogs.value.map((catalog) => ({
-    ...catalog,
-    nombre:
-      catalog.nombre?.trim() ||
-      `Catálogo ${catalog.id ?? ''}`.trim() ||
-      'Sin nombre',
-  })),
-)
+const normalizedCatalogs = computed(() => {
+  return catalogs.value.map((catalog) => {
+    const etiquetas = catalog.etiquetas
+      ? catalog.etiquetas
+          .split(',')
+          .map((tag) => tag.trim())
+          .filter(Boolean)
+      : []
+
+    return {
+      ...catalog,
+      nombre: catalog.nombre?.trim() || 'Sin nombre',
+      etiquetas,
+    }
+  })
+})
+
+const availableTags = computed(() => {
+  const tags = new Set<string>()
+
+  normalizedCatalogs.value.forEach((catalog) => {
+    catalog.etiquetas.forEach((tag) => {
+      tags.add(tag)
+    })
+  })
+
+  return Array.from(tags).sort((a, b) => a.localeCompare(b))
+})
 
 const filteredCatalogs = computed(() => {
   const query = search.value.trim().toLowerCase()
 
-  if (!query) {
-    return normalizedCatalogs.value
+  return normalizedCatalogs.value.filter((catalog) => {
+    const matchesName =
+      !query ||
+      catalog.nombre.toLowerCase().includes(query)
+
+    const matchesTags =
+      selectedTags.value.length === 0 ||
+      selectedTags.value.every((tag) =>
+        catalog.etiquetas.includes(tag)
+      )
+
+    return matchesName && matchesTags
+  })
+})
+
+function toggleTag(tag: string) {
+  if (selectedTags.value.includes(tag)) {
+    selectedTags.value = selectedTags.value.filter(
+      (selectedTag) => selectedTag !== tag
+    )
+
+    return
   }
 
-  return normalizedCatalogs.value.filter((catalog) =>
-    catalog.nombre.toLowerCase().includes(query),
-  )
-})
+  selectedTags.value.push(tag)
+}
+
+function clearFilters() {
+  search.value = ''
+  selectedTags.value = []
+}
 
 async function loadCatalogs() {
   loading.value = true
   error.value = ''
 
   try {
-    catalogs.value = await api.catalogosTodos<Catalogo>()
+    catalogs.value =
+      await api.catalogosPublicos<Catalogo>()
   } catch (reason) {
     error.value =
       reason instanceof Error
@@ -46,48 +90,96 @@ async function loadCatalogs() {
   }
 }
 
+function openLogin() {
+  console.log('Abrir login')
+}
+
+function addCatalog() {
+  console.log('Añadir catálogo')
+}
+
 onMounted(() => {
   loadCatalogs()
 })
 </script>
 
+
 <template>
   <div class="catalog-page">
 
-    <!-- HEADER -->
     <header class="header">
+
       <div class="brand">
+
         <div class="brand-icon">
           <Store :size="22" />
         </div>
 
-        <div>
+        <div class="brand-text">
           <h1>CatalogosZone</h1>
-          <p>Todos tus catálogos en un solo lugar</p>
+
+          <p>
+            Todos tus catálogos en un solo lugar
+          </p>
         </div>
+
       </div>
 
-      <button class="add-catalog-btn">
-        Añade tu catálogo
-      </button>
+
+      <div class="header-actions">
+
+        <button
+          class="add-catalog-btn"
+          type="button"
+          @click="addCatalog"
+        >
+          Añade tu catálogo
+        </button>
+
+
+        <button
+          class="admin-btn"
+          type="button"
+          @click="openLogin"
+        >
+          <Shield :size="17" />
+
+          <span>
+            Administración
+          </span>
+        </button>
+
+      </div>
+
     </header>
 
-    <!-- HERO -->
+
     <section class="hero">
+
       <div class="hero-content">
-        <span class="hero-label">CATÁLOGOS DIGITALES</span>
+
+        <span class="hero-label">
+          CATÁLOGOS DIGITALES
+        </span>
+
 
         <h2>
           Descubre productos de
-          <span>todos tus negocios favoritos</span>
+
+          <span>
+            todos tus negocios favoritos
+          </span>
         </h2>
 
+
         <p>
-          Explora catálogos, descubre productos y encuentra lo que buscas
-          fácilmente.
+          Explora catálogos, descubre productos y
+          encuentra lo que buscas fácilmente.
         </p>
 
+
         <div class="search-box">
+
           <Search :size="20" />
 
           <input
@@ -95,49 +187,164 @@ onMounted(() => {
             type="text"
             placeholder="Buscar catálogo..."
           />
+
         </div>
+
+
+        <div
+          v-if="availableTags.length"
+          class="tag-filter"
+        >
+
+          <div class="tag-filter-header">
+
+            <div class="tag-title">
+
+              <Tag :size="16" />
+
+              <span>
+                Filtrar por etiquetas
+              </span>
+
+            </div>
+
+
+            <button
+              v-if="selectedTags.length"
+              class="clear-tags-btn"
+              type="button"
+              @click="clearFilters"
+            >
+              Limpiar
+            </button>
+
+          </div>
+
+
+          <div class="tag-list">
+
+            <button
+              v-for="tag in availableTags"
+              :key="tag"
+              type="button"
+              class="tag-btn"
+              :class="{
+                selected: selectedTags.includes(tag)
+              }"
+              @click="toggleTag(tag)"
+            >
+              {{ tag }}
+            </button>
+
+          </div>
+
+        </div>
+
       </div>
+
     </section>
 
-    <!-- CATALOGS -->
+
     <main class="catalog-content">
 
       <div class="section-header">
+
         <div>
-          <h2>Catálogos</h2>
+
+          <h2>
+            Catálogos
+          </h2>
+
           <p>
             {{ filteredCatalogs.length }}
-            {{ filteredCatalogs.length === 1 ? 'catálogo disponible' : 'catálogos disponibles' }}
+
+            {{
+              filteredCatalogs.length === 1
+                ? 'catálogo disponible'
+                : 'catálogos disponibles'
+            }}
           </p>
+
         </div>
+
+
+        <button
+          v-if="search || selectedTags.length"
+          class="clear-content-filter"
+          type="button"
+          @click="clearFilters"
+        >
+          Limpiar filtros
+        </button>
+
       </div>
 
-      <!-- LOADING -->
-      <div v-if="loading" class="state">
+
+      <div
+        v-if="loading"
+        class="state"
+      >
+
         <div class="loader"></div>
-        <p>Cargando catálogos...</p>
+
+        <p>
+          Cargando catálogos...
+        </p>
+
       </div>
 
-      <!-- ERROR -->
-      <div v-else-if="error" class="state error">
+
+      <div
+        v-else-if="error"
+        class="state error"
+      >
+
         <Package :size="32" />
-        <p>{{ error }}</p>
-        <button @click="loadCatalogs">
+
+        <p>
+          {{ error }}
+        </p>
+
+        <button
+          type="button"
+          @click="loadCatalogs"
+        >
           Reintentar
         </button>
+
       </div>
 
-      <!-- EMPTY -->
-      <div v-else-if="!filteredCatalogs.length" class="state">
+
+      <div
+        v-else-if="!filteredCatalogs.length"
+        class="state"
+      >
+
         <Package :size="36" />
-        <h3>No encontramos catálogos</h3>
+
+        <h3>
+          No encontramos catálogos
+        </h3>
+
         <p>
-          Prueba con otro término de búsqueda.
+          Prueba con otro nombre o selecciona
+          otras etiquetas.
         </p>
+
+        <button
+          type="button"
+          @click="clearFilters"
+        >
+          Limpiar filtros
+        </button>
+
       </div>
 
-      <!-- GRID -->
-      <div v-else class="catalog-grid">
+
+      <div
+        v-else
+        class="catalog-grid"
+      >
 
         <article
           v-for="catalog in filteredCatalogs"
@@ -146,17 +353,27 @@ onMounted(() => {
         >
 
           <div class="catalog-cover">
+
             <div class="cover-placeholder">
               <Store :size="42" />
             </div>
 
+
             <span
               class="status"
-              :class="{ inactive: !catalog.activo }"
+              :class="{
+                inactive: !catalog.activo
+              }"
             >
-              {{ catalog.activo ? 'Activo' : 'Inactivo' }}
+              {{
+                catalog.activo
+                  ? 'Activo'
+                  : 'Inactivo'
+              }}
             </span>
+
           </div>
+
 
           <div class="catalog-info">
 
@@ -164,11 +381,35 @@ onMounted(() => {
               {{ catalog.nombre }}
             </h3>
 
+
             <p>
-              {{ catalog.descripcion || 'Catálogo sin descripción.' }}
+              {{
+                catalog.descripcion ||
+                'Catálogo sin descripción.'
+              }}
             </p>
 
-            <button class="view-btn">
+
+            <div
+              v-if="catalog.etiquetas.length"
+              class="catalog-tags"
+            >
+
+              <span
+                v-for="tag in catalog.etiquetas"
+                :key="tag"
+                class="catalog-tag"
+              >
+                {{ tag }}
+              </span>
+
+            </div>
+
+
+            <button
+              class="view-btn"
+              type="button"
+            >
               Ver catálogo
             </button>
 
@@ -180,17 +421,25 @@ onMounted(() => {
 
     </main>
 
-    <!-- FOOTER -->
+
     <footer class="footer">
+
       <p>
-        © {{ new Date().getFullYear() }} CatalogosZone
+        © {{ new Date().getFullYear() }}
+        CatalogosZone
       </p>
+
     </footer>
 
   </div>
 </template>
 
+
 <style scoped>
+
+/* =========================
+   PÁGINA GENERAL
+========================= */
 
 :global(*) {
   box-sizing: border-box;
@@ -198,27 +447,18 @@ onMounted(() => {
 
 :global(body) {
   margin: 0;
-  font-family:
-    Inter,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
-
+  font-family: Arial, sans-serif;
   background: #f5f7f5;
   color: #17231f;
 }
 
-/* =========================
-   PAGE
-========================= */
-
 .catalog-page {
   min-height: 100vh;
+
   display: flex;
   flex-direction: column;
 }
+
 
 /* =========================
    HEADER
@@ -226,19 +466,24 @@ onMounted(() => {
 
 .header {
   min-height: 72px;
+
   padding: 0 6%;
+
   display: flex;
   align-items: center;
   justify-content: space-between;
+
   gap: 20px;
 
   background: #ffffff;
+
   border-bottom: 1px solid #e6ebe7;
 }
 
 .brand {
   display: flex;
   align-items: center;
+
   gap: 12px;
 }
 
@@ -251,64 +496,84 @@ onMounted(() => {
 
   background: #18382e;
   color: white;
+
   border-radius: 12px;
 }
 
 .brand h1 {
   margin: 0;
+
   font-size: 20px;
-  font-weight: 800;
+
   color: #18382e;
 }
 
 .brand p {
   margin: 2px 0 0;
-  color: #728078;
+
   font-size: 12px;
+
+  color: #728078;
 }
 
-/* =========================
-   BUTTON
-========================= */
+.header-actions {
+  display: flex;
+  align-items: center;
+
+  gap: 10px;
+}
+
+.add-catalog-btn,
+.admin-btn {
+  min-height: 40px;
+
+  padding: 10px 16px;
+
+  border-radius: 10px;
+
+  font-size: 13px;
+  font-weight: bold;
+
+  cursor: pointer;
+}
 
 .add-catalog-btn {
   border: 0;
-  border-radius: 10px;
-
-  padding: 11px 18px;
 
   background: #18382e;
   color: white;
-
-  font-size: 14px;
-  font-weight: 700;
-
-  cursor: pointer;
-
-  transition:
-    transform 0.15s ease,
-    background 0.15s ease;
 }
 
-.add-catalog-btn:hover {
-  background: #245443;
-  transform: translateY(-1px);
+.admin-btn {
+  display: flex;
+  align-items: center;
+
+  gap: 7px;
+
+  border: 1px solid #dce5df;
+
+  background: #edf2ef;
+  color: #18382e;
 }
+
 
 /* =========================
    HERO
 ========================= */
 
 .hero {
-  background: #18382e;
-  color: white;
-
   padding: 70px 6%;
+
+  background: #18382e;
+
+  color: white;
 }
 
 .hero-content {
   width: min(900px, 100%);
+
   margin: 0 auto;
+
   text-align: center;
 }
 
@@ -318,8 +583,7 @@ onMounted(() => {
   margin-bottom: 16px;
 
   font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.14em;
+  font-weight: bold;
 
   color: #b9d8ca;
 }
@@ -328,12 +592,13 @@ onMounted(() => {
   margin: 0;
 
   font-size: clamp(32px, 5vw, 58px);
+
   line-height: 1.08;
-  letter-spacing: -0.04em;
 }
 
 .hero h2 span {
   display: block;
+
   color: #9ed0b8;
 }
 
@@ -344,56 +609,132 @@ onMounted(() => {
 
   color: #d4e3dc;
 
-  font-size: 16px;
   line-height: 1.6;
 }
 
+
 /* =========================
-   SEARCH
+   BUSCADOR
 ========================= */
 
 .search-box {
   width: min(560px, 100%);
+
   margin: 0 auto;
 
   display: flex;
   align-items: center;
+
   gap: 12px;
 
   padding: 0 18px;
 
   background: white;
+
   color: #637169;
 
   border-radius: 14px;
-
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
 }
 
 .search-box input {
   width: 100%;
 
-  border: 0;
-  outline: 0;
-
   padding: 16px 0;
 
-  font-size: 15px;
-  color: #17231f;
+  border: 0;
+  outline: none;
 
   background: transparent;
+
+  font-size: 15px;
 }
 
-.search-box input::placeholder {
-  color: #8b9690;
-}
 
 /* =========================
-   CONTENT
+   FILTRO DE ETIQUETAS
+========================= */
+
+.tag-filter {
+  width: min(850px, 100%);
+
+  margin: 24px auto 0;
+
+  padding: 18px;
+
+  text-align: left;
+
+  background: rgba(255, 255, 255, 0.08);
+
+  border: 1px solid rgba(255, 255, 255, 0.12);
+
+  border-radius: 14px;
+}
+
+.tag-filter-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  margin-bottom: 13px;
+}
+
+.tag-title {
+  display: flex;
+  align-items: center;
+
+  gap: 7px;
+
+  font-size: 13px;
+  font-weight: bold;
+}
+
+.clear-tags-btn {
+  border: 0;
+
+  background: transparent;
+
+  color: #b9d8ca;
+
+  cursor: pointer;
+}
+
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+
+  gap: 8px;
+}
+
+.tag-btn {
+  padding: 7px 12px;
+
+  border: 1px solid rgba(255, 255, 255, 0.2);
+
+  border-radius: 999px;
+
+  background: rgba(255, 255, 255, 0.06);
+
+  color: white;
+
+  cursor: pointer;
+}
+
+.tag-btn.selected {
+  background: #9ed0b8;
+
+  border-color: #9ed0b8;
+
+  color: #18382e;
+}
+
+
+/* =========================
+   CONTENIDO
 ========================= */
 
 .catalog-content {
   width: min(1200px, 88%);
+
   margin: 0 auto;
 
   padding: 48px 0 70px;
@@ -402,6 +743,10 @@ onMounted(() => {
 }
 
 .section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
   margin-bottom: 24px;
 }
 
@@ -415,9 +760,22 @@ onMounted(() => {
   margin: 6px 0 0;
 
   color: #748078;
-
-  font-size: 14px;
 }
+
+.clear-content-filter {
+  padding: 8px 12px;
+
+  border: 1px solid #d8e1db;
+
+  border-radius: 9px;
+
+  background: white;
+
+  color: #18382e;
+
+  cursor: pointer;
+}
+
 
 /* =========================
    GRID
@@ -426,14 +784,14 @@ onMounted(() => {
 .catalog-grid {
   display: grid;
 
-  grid-template-columns:
-    repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(3, 1fr);
 
   gap: 22px;
 }
 
+
 /* =========================
-   CARD
+   TARJETA
 ========================= */
 
 .catalog-card {
@@ -442,31 +800,20 @@ onMounted(() => {
   background: white;
 
   border: 1px solid #e2e9e4;
+
   border-radius: 18px;
 
-  box-shadow:
-    0 4px 16px rgba(24, 56, 46, 0.05);
-
-  transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease;
+  transition: transform 0.2s;
 }
 
 .catalog-card:hover {
   transform: translateY(-4px);
-
-  box-shadow:
-    0 12px 30px rgba(24, 56, 46, 0.12);
 }
 
-/* =========================
-   COVER
-========================= */
-
 .catalog-cover {
-  height: 190px;
-
   position: relative;
+
+  height: 190px;
 
   background: #e8eee9;
 }
@@ -492,20 +839,18 @@ onMounted(() => {
   border-radius: 999px;
 
   background: #d8f0df;
+
   color: #1b5438;
 
   font-size: 11px;
-  font-weight: 800;
+  font-weight: bold;
 }
 
 .status.inactive {
   background: #f5dfdc;
+
   color: #7b3933;
 }
-
-/* =========================
-   CARD INFO
-========================= */
 
 .catalog-info {
   padding: 20px;
@@ -515,47 +860,77 @@ onMounted(() => {
   margin: 0 0 8px;
 
   font-size: 19px;
-  line-height: 1.3;
 }
 
 .catalog-info p {
-  min-height: 44px;
-
-  margin: 0 0 18px;
+  margin: 0 0 14px;
 
   color: #6d7972;
 
   font-size: 14px;
-  line-height: 1.55;
+
+  line-height: 1.5;
 }
+
+
+/* =========================
+   ETIQUETAS
+========================= */
+
+.catalog-tags {
+  display: flex;
+  flex-wrap: wrap;
+
+  gap: 5px;
+
+  margin-bottom: 16px;
+}
+
+.catalog-tag {
+  padding: 4px 8px;
+
+  border-radius: 999px;
+
+  background: #edf3ef;
+
+  color: #46675a;
+
+  font-size: 10px;
+  font-weight: bold;
+}
+
+
+/* =========================
+   BOTÓN
+========================= */
 
 .view-btn {
   width: 100%;
 
-  border: 1px solid #d8e1db;
-  border-radius: 10px;
-
   padding: 11px;
 
+  border: 1px solid #d8e1db;
+
+  border-radius: 10px;
+
   background: white;
+
   color: #18382e;
 
-  font-weight: 700;
+  font-weight: bold;
 
   cursor: pointer;
-
-  transition:
-    background 0.15s ease,
-    color 0.15s ease;
 }
 
 .view-btn:hover {
   background: #18382e;
+
   color: white;
 }
 
+
 /* =========================
-   STATES
+   ESTADOS
 ========================= */
 
 .state {
@@ -564,6 +939,7 @@ onMounted(() => {
   display: grid;
   place-items: center;
   align-content: center;
+
   gap: 8px;
 
   text-align: center;
@@ -571,32 +947,24 @@ onMounted(() => {
   background: white;
 
   border: 1px solid #e3e9e4;
+
   border-radius: 16px;
 
   color: #718078;
 }
 
-.state h3 {
-  margin: 8px 0 0;
-  color: #26352f;
-}
-
-.state p {
-  margin: 0;
-}
-
 .state button {
   margin-top: 8px;
 
-  border: 0;
-  border-radius: 9px;
-
   padding: 10px 16px;
 
-  background: #18382e;
-  color: white;
+  border: 0;
 
-  font-weight: 700;
+  border-radius: 9px;
+
+  background: #18382e;
+
+  color: white;
 
   cursor: pointer;
 }
@@ -604,6 +972,7 @@ onMounted(() => {
 .error {
   color: #a34a42;
 }
+
 
 /* =========================
    LOADER
@@ -614,6 +983,7 @@ onMounted(() => {
   height: 30px;
 
   border: 3px solid #dce6e0;
+
   border-top-color: #18382e;
 
   border-radius: 50%;
@@ -622,10 +992,13 @@ onMounted(() => {
 }
 
 @keyframes spin {
+
   to {
     transform: rotate(360deg);
   }
+
 }
+
 
 /* =========================
    FOOTER
@@ -634,128 +1007,182 @@ onMounted(() => {
 .footer {
   padding: 24px 6%;
 
-  border-top: 1px solid #e2e8e4;
+  text-align: center;
 
   background: white;
 
-  text-align: center;
+  border-top: 1px solid #e2e8e4;
 
   color: #7b8780;
 
   font-size: 13px;
 }
 
+
 /* =========================
    TABLET
 ========================= */
 
 @media (max-width: 900px) {
+
   .catalog-grid {
-    grid-template-columns:
-      repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(2, 1fr);
   }
 
-  .hero {
-    padding: 60px 6%;
-  }
 }
 
+
 /* =========================
-   MOBILE
+   MÓVIL
+   2 TARJETAS POR FILA
 ========================= */
 
 @media (max-width: 600px) {
+
   .header {
-    min-height: auto;
+    padding: 12px 4%;
 
-    padding: 14px 5%;
+    gap: 8px;
+  }
 
-    align-items: center;
+  .brand {
+    gap: 7px;
   }
 
   .brand-icon {
-    width: 38px;
-    height: 38px;
+    width: 34px;
+    height: 34px;
   }
 
   .brand h1 {
-    font-size: 17px;
+    font-size: 15px;
   }
 
   .brand p {
     display: none;
   }
 
-  .add-catalog-btn {
-    padding: 9px 12px;
+  .header-actions {
+    gap: 4px;
+  }
 
-    font-size: 12px;
+  .add-catalog-btn,
+  .admin-btn {
+    min-height: 34px;
+
+    padding: 6px 8px;
+
+    font-size: 9px;
+  }
+
+  .admin-btn span {
+    display: none;
   }
 
   .hero {
-    padding: 48px 5%;
+    padding: 42px 4%;
   }
 
   .hero h2 {
-    font-size: 34px;
+    font-size: 30px;
   }
 
   .hero p {
-    font-size: 14px;
+    font-size: 13px;
   }
 
-  .search-box {
-    border-radius: 12px;
+  .tag-filter {
+    padding: 13px;
   }
 
   .catalog-content {
-    width: 90%;
+    width: 94%;
 
-    padding: 34px 0 50px;
+    padding: 32px 0 50px;
   }
 
-  .section-header h2 {
-    font-size: 24px;
-  }
+
+  /* 2 TARJETAS */
 
   .catalog-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
 
-    gap: 16px;
-  }
-
-  .catalog-cover {
-    height: 180px;
-  }
-
-  .catalog-info {
-    padding: 17px;
-  }
-
-  .catalog-info p {
-    min-height: auto;
-  }
-}
-
-/* =========================
-   SMALL MOBILE
-========================= */
-
-@media (max-width: 380px) {
-  .header {
     gap: 10px;
   }
 
-  .brand h1 {
-    font-size: 16px;
+
+  /* TARJETA PEQUEÑA */
+
+  .catalog-card {
+    border-radius: 12px;
   }
 
-  .add-catalog-btn {
-    padding: 8px 10px;
+  .catalog-cover {
+    height: 105px;
   }
 
-  .hero h2 {
-    font-size: 29px;
+  .cover-placeholder svg {
+    width: 28px;
+    height: 28px;
   }
+
+  .status {
+    top: 6px;
+    right: 6px;
+
+    padding: 3px 6px;
+
+    font-size: 8px;
+  }
+
+  .catalog-info {
+    padding: 10px;
+  }
+
+  .catalog-info h3 {
+    margin-bottom: 5px;
+
+    font-size: 13px;
+
+    white-space: nowrap;
+
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+  }
+
+  .catalog-info p {
+    display: -webkit-box;
+
+    -webkit-line-clamp: 2;
+
+    -webkit-box-orient: vertical;
+
+    overflow: hidden;
+
+    margin-bottom: 8px;
+
+    font-size: 10px;
+  }
+
+  .catalog-tags {
+    margin-bottom: 8px;
+
+    gap: 3px;
+  }
+
+  .catalog-tag {
+    padding: 3px 5px;
+
+    font-size: 8px;
+  }
+
+  .view-btn {
+    padding: 8px 4px;
+
+    font-size: 10px;
+  }
+
 }
+
 </style>
