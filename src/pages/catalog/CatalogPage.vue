@@ -3,6 +3,10 @@ import { computed, onMounted, ref } from 'vue'
 import { Search, Package, Store, Shield, Tag } from 'lucide-vue-next'
 import { api, type Catalogo } from '../../api'
 
+const emit = defineEmits<{
+  (e: 'open-login'): void
+}>()
+
 const catalogs = ref<Catalogo[]>([])
 const search = ref('')
 const selectedTags = ref<string[]>([])
@@ -90,7 +94,7 @@ async function loadCatalogs() {
 }
 
 function openLogin() {
-  console.log('Abrir login')
+  emit('open-login')
 }
 
 function addCatalog() {
