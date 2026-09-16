@@ -60,7 +60,7 @@ const emit = defineEmits<{
   display: flex;
   flex-direction: column;
   gap: 22px;
-  position: relative;
+  position: fixed;
   overflow-y: auto;
 }
 .sidebar nav {

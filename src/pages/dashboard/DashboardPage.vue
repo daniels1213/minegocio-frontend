@@ -60,9 +60,13 @@ const lowStock = computed(() => props.variants.filter((variant) => variant.exist
 const recentCatalogs = computed(() => props.catalogs.slice(0, 5))
 const pageTitle = computed(() => items.find((item) => item.id === activeView.value)?.label || 'Resumen')
 
-watch(mobileOpen, (isOpen) => {
-  document.body.style.overflow = isOpen ? 'hidden' : ''
-})
+watch(
+  [mobileOpen, profileVisible],
+  ([mobileIsOpen, profileIsOpen]) => {
+    document.body.style.overflow =
+      mobileIsOpen || profileIsOpen ? 'hidden' : ''
+  }
+)
 
 function selectView(view: View) {
   activeView.value = view
@@ -133,7 +137,7 @@ onBeforeUnmount(() => {
       @logout="logout"
     />
 
-    <main class="dashboard-main">
+    <main class="dashboard-main overflow-y-auto ">
       <header class="topbar">
         <button class="mobile-menu" type="button" aria-label="Abrir menú" @click="mobileOpen = true">
           <Menu :size="20" />
@@ -221,7 +225,7 @@ onBeforeUnmount(() => {
 :global(*) { box-sizing: border-box; }
 :global(body) { margin: 0; font-family: Arial, sans-serif; background: #f7f8f4; color: #17332a; }
 .dashboard-shell { min-height: 100vh; display: flex; background: #f7f8f4; }
-.dashboard-main { min-width: 0; flex: 1; margin-left: 260px; padding: 0 4.5% 42px; }
+.dashboard-main { min-width: 80%; flex: 1; margin-left: 260px; padding: 0 4.5% 42px; }
 .topbar { min-height: 92px; display: flex; align-items: center; justify-content: space-between; gap: 24px; border-bottom: 1px solid #e7ebe4; }
 .breadcrumb, .eyebrow { color: #6c8175; font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
 .topbar h1 { margin: 7px 0 0; font: 700 28px 'Space Grotesk', Arial, sans-serif; letter-spacing: -.7px; }
