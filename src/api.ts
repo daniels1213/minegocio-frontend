@@ -11,7 +11,7 @@ export interface Pedido { id?: number; numeroPedido?: string; clienteId: number;
 export interface Compra { id?: number; numeroCompra?: string; proveedorId: number; estado?: string; subtotal: number; costoAdicional?: number; total: number; moneda?: string; fechaCreacion?: string }
 export interface Movimiento { id: number; varianteProductoId: number; tipo: TipoMovimiento; cantidad: number; existenciaAnterior: number; existenciaNueva: number; motivo?: string; fechaCreacion?: string }
 export interface Usuario { id: number; nombreUsuario: string; nombre: string; apellido?: string; correo?: string; telefono?: string; fotoPerfil?: string; esSuperadministrador: boolean; activo: boolean }
-const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080'
+const baseUrl = import.meta.env.VITE_API_URL || 'https://minegocio-backend.onrender.com'
 let credentials = sessionStorage.getItem('minegocio_credentials') || ''
 export function setCredentials(username: string, password: string) { credentials = btoa(`${username}:${password}`); sessionStorage.setItem('minegocio_credentials', credentials); sessionStorage.setItem('minegocio_username', username) }
 export function clearCredentials() { credentials = ''; sessionStorage.removeItem('minegocio_credentials'); sessionStorage.removeItem('minegocio_username') }
