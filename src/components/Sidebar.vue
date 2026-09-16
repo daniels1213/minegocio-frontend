@@ -53,7 +53,7 @@ const emit = defineEmits<{
 .sidebar {
   width: 260px;
   flex: 0 0 260px;
-  min-height: 100vh;
+  height: 100vh;
   background: #1a5f47;
   border-right: 1px solid #124937;
   padding: 20px 16px;
@@ -62,6 +62,12 @@ const emit = defineEmits<{
   gap: 22px;
   position: relative;
   overflow-y: auto;
+}
+.sidebar nav {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
 }
 .brand {
   display: flex;
@@ -167,6 +173,7 @@ const emit = defineEmits<{
     transition: transform 0.2s ease;
     width: min(calc(100vw - 56px), 320px);
     flex-basis: auto;
+    height: 100dvh;
     min-height: 100dvh;
     max-height: 100dvh;
     padding: max(20px, env(safe-area-inset-top)) 16px max(20px, env(safe-area-inset-bottom));

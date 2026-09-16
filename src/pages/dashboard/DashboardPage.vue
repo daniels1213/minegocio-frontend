@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   Boxes,
   ClipboardList,
@@ -60,6 +60,10 @@ const lowStock = computed(() => props.variants.filter((variant) => variant.exist
 const recentCatalogs = computed(() => props.catalogs.slice(0, 5))
 const pageTitle = computed(() => items.find((item) => item.id === activeView.value)?.label || 'Resumen')
 
+watch(mobileOpen, (isOpen) => {
+  document.body.style.overflow = isOpen ? 'hidden' : ''
+})
+
 function selectView(view: View) {
   activeView.value = view
   mobileOpen.value = false
@@ -106,6 +110,10 @@ onMounted(async () => {
   } catch {
     // Keep the dashboard usable when the profile request is unavailable.
   }
+})
+
+onBeforeUnmount(() => {
+  document.body.style.overflow = ''
 })
 </script>
 
@@ -213,7 +221,7 @@ onMounted(async () => {
 :global(*) { box-sizing: border-box; }
 :global(body) { margin: 0; font-family: Arial, sans-serif; background: #f7f8f4; color: #17332a; }
 .dashboard-shell { min-height: 100vh; display: flex; background: #f7f8f4; }
-.dashboard-main { min-width: 0; flex: 1; padding: 0 4.5% 42px; }
+.dashboard-main { min-width: 0; flex: 1; margin-left: 260px; padding: 0 4.5% 42px; }
 .topbar { min-height: 92px; display: flex; align-items: center; justify-content: space-between; gap: 24px; border-bottom: 1px solid #e7ebe4; }
 .breadcrumb, .eyebrow { color: #6c8175; font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
 .topbar h1 { margin: 7px 0 0; font: 700 28px 'Space Grotesk', Arial, sans-serif; letter-spacing: -.7px; }
@@ -267,6 +275,6 @@ onMounted(async () => {
 .placeholder-icon { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 14px; background: #e6f0eb; color: #247050; }
 .sidebar-backdrop { display: none; }
 @media (max-width: 1100px) { .metric-grid { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 920px) { .mobile-menu { display: grid; } .sidebar-backdrop { display: block; position: fixed; inset: 0; z-index: 20; background: rgba(19, 35, 29, .32); } .dashboard-main { padding: 0 5% 32px; } .top-profile-copy { display: none; } }
+@media (max-width: 920px) { .mobile-menu { display: grid; } .sidebar-backdrop { display: block; position: fixed; inset: 0; z-index: 20; background: rgba(19, 35, 29, .32); } .dashboard-main { margin-left: 0; padding: 0 5% 32px; } .top-profile-copy { display: none; } }
 @media (max-width: 680px) { .topbar { min-height: 78px; gap: 12px; } .topbar h1 { font-size: 23px; } .welcome-row { display: grid; align-items: start; } .primary-action { justify-content: center; } .metric-grid, .content-grid { grid-template-columns: 1fr; } .dashboard-panel { padding: 18px; } .catalog-row small { max-width: 145px; } }
 </style>
