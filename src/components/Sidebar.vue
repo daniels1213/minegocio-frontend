@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { LogOut, Package, UserRound } from 'lucide-vue-next'
+import { LogOut, Package } from 'lucide-vue-next'
 import type { Component } from 'vue'
 
 type View = 'dashboard' | 'catalogo' | 'inventario' | 'pedidos' | 'compras' | 'clientes' | 'proveedores' | 'usuarios'
@@ -41,18 +41,6 @@ const emit = defineEmits<{
     </nav>
 
     <div class="sidebar-bottom">
-      <div class="profile-mini">
-        <span class="avatar">{{ props.username.slice(0, 1).toUpperCase() }}</span>
-        <div>
-          <strong>{{ props.username }}</strong>
-          <small>{{ props.isSuperadmin ? 'Superadministrador' : 'Usuario operativo' }}</small>
-        </div>
-      </div>
-
-      <button class="icon-btn" title="Abrir perfil" @click="emit('open-profile')">
-        <UserRound :size="17" />
-      </button>
-
       <button class="btn logout" @click="emit('logout')">
         <LogOut :size="17" />
         <span>Cerrar sesión</span>
@@ -64,13 +52,16 @@ const emit = defineEmits<{
 <style scoped>
 .sidebar {
   width: 260px;
-  background: #f5f6f0;
-  border-right: 1px solid #e3e6dd;
+  flex: 0 0 260px;
+  min-height: 100vh;
+  background: #1a5f47;
+  border-right: 1px solid #124937;
   padding: 20px 16px;
   display: flex;
   flex-direction: column;
   gap: 22px;
   position: relative;
+  overflow-y: auto;
 }
 .brand {
   display: flex;
@@ -80,6 +71,7 @@ const emit = defineEmits<{
   font-weight: 700;
   letter-spacing: -0.5px;
   font-size: 19px;
+  color: #ffffff;
 }
 .brand-mark {
   width: 36px;
@@ -92,9 +84,10 @@ const emit = defineEmits<{
 }
 .nav-item {
   width: 100%;
+  min-height: 48px;
   border: 0;
   background: transparent;
-  color: #1a2825;
+  color: #f5fbf7;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -102,10 +95,16 @@ const emit = defineEmits<{
   border-radius: 12px;
   font-weight: 600;
   text-align: left;
+  cursor: pointer;
+  transition: background .18s ease, color .18s ease;
+}
+.nav-item:hover {
+  background: rgba(255, 255, 255, .14);
+  color: #ffffff;
 }
 .nav-item.active {
-  background: #dfece7;
-  color: #173d32;
+  background: #d9f0df;
+  color: #124937;
 }
 .sidebar-bottom {
   margin-top: auto;
@@ -138,15 +137,26 @@ const emit = defineEmits<{
 .btn.logout {
   width: 100%;
   justify-content: center;
+  border: 0;
+  background: #ffffff;
+  color: #124937;
+  cursor: pointer;
+  transition: background .18s ease, color .18s ease;
+}
+.btn.logout:hover {
+  background: #f2c96b;
+  color: #173d32;
 }
 .icon-btn {
-  border: 1px solid #dfe6de;
-  background: #fff;
+  border: 1px solid rgba(255, 255, 255, .45);
+  background: rgba(255, 255, 255, .12);
+  color: #ffffff;
   width: 42px;
   height: 42px;
   border-radius: 12px;
   display: grid;
   place-items: center;
+  cursor: pointer;
 }
 @media (max-width: 920px) {
   .sidebar {
@@ -155,10 +165,29 @@ const emit = defineEmits<{
     transform: translateX(-105%);
     z-index: 30;
     transition: transform 0.2s ease;
-    width: min(82vw, 300px);
+    width: min(calc(100vw - 56px), 320px);
+    flex-basis: auto;
+    min-height: 100dvh;
+    max-height: 100dvh;
+    padding: max(20px, env(safe-area-inset-top)) 16px max(20px, env(safe-area-inset-bottom));
+    box-shadow: 14px 0 32px rgba(8, 42, 29, .2);
   }
   .sidebar.is-open {
     transform: translateX(0);
+  }
+}
+
+@media (max-width: 420px) {
+  .sidebar {
+    width: calc(100vw - 32px);
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+  .brand {
+    font-size: 17px;
+  }
+  .nav-item {
+    padding: 12px 11px;
   }
 }
 </style>
