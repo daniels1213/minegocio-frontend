@@ -4,7 +4,7 @@ export interface EntityReference { id: number; label: string }
 export interface Cliente { id?: number; nombre: string; telefono?: string; correo?: string; ciudad?: string; direccion?: string }
 export interface Proveedor { id?: number; nombre?: string; personaContacto?: string; telefono?: string; correo?: string; activo: boolean }
 export interface Producto { id?: number; seccionId: number; catalogoId?: number; nombre?: string; descripcionCorta?: string; moneda?: string; activo: boolean; visibleCatalogo: boolean; destacado: boolean }
-export interface Catalogo { id?: number; usuarioId?: number; nombre: string; descripcion?: string; etiquetas?: string; fotoPortada?: string; visibleEnPaginaPrincipal: boolean; activo: boolean }
+export interface Catalogo { id?: number; usuarioId?: number; nombre: string; descripcion?: string; etiquetas?: string[]; fotoPortada?: string; visibleEnPaginaPrincipal: boolean; activo: boolean }
 export interface Variante { id?: number; productoId: number; codigo: string; nombre: string; precio: number; existencia: number; existenciaMinima: number; activa: boolean }
 export interface DetallePedido { varianteProductoId: number; cantidad: number; precioUnitario: number; subtotal?: number }
 export interface Pedido { id?: number; numeroPedido?: string; clienteId: number; estado?: EstadoPedido; subtotal: number; costoEntrega?: number; total: number; moneda?: string; detalles?: DetallePedido[]; fechaCreacion?: string }
