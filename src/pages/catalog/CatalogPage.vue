@@ -11,9 +11,8 @@ const error = ref('')
 
 const normalizedCatalogs = computed(() => {
   return catalogs.value.map((catalog) => {
-    const etiquetas = catalog.etiquetas
+    const etiquetas = Array.isArray(catalog.etiquetas)
       ? catalog.etiquetas
-          .split(',')
           .map((tag) => tag.trim())
           .filter(Boolean)
       : []
