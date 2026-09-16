@@ -9,6 +9,10 @@ const isAuthenticated = ref(hasCredentials())
 function showDashboard() {
   isAuthenticated.value = true
 }
+
+function showCatalog() {
+  isAuthenticated.value = false
+}
 </script>
 
 <template>
@@ -22,5 +26,6 @@ function showDashboard() {
     :products="[]"
     :variants="[]"
     :catalogs="[]"
+    @logout="showCatalog"
   />
 </template>
