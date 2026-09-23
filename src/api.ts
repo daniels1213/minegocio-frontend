@@ -9,7 +9,7 @@ export interface Variante { id?: number; productoId: number; codigo: string; nom
 export interface DetallePedido { varianteProductoId: number; cantidad: number; precioUnitario: number; subtotal?: number }
 export interface Pedido { id?: number; numeroPedido?: string; clienteId: number; estado?: EstadoPedido; subtotal: number; costoEntrega?: number; total: number; moneda?: string; detalles?: DetallePedido[]; fechaCreacion?: string; fecha?: string; ingresoTotal?: number }
 export interface Movimiento { id: number; varianteProductoId: number; tipo: TipoMovimiento; cantidad: number; existenciaAnterior: number; existenciaNueva: number; motivo?: string; fechaCreacion?: string }
-export interface Usuario { id: number; nombreUsuario: string; nombre: string; apellido?: string; correo?: string; telefono?: string; fotoPerfil?: string; esSuperadministrador: boolean; activo: boolean }
+export interface Usuario { id: number; username: string; nombre: string; wapp: string; rol: 'USER' | 'ADMIN'; urlFotoPerfil?: string; fechaCreacion?: string }
 const baseUrl = import.meta.env.VITE_API_URL || 'https://minegocio-backend.onrender.com'
 let credentials = sessionStorage.getItem('minegocio_credentials') || ''
 export function setCredentials(username: string, password: string) { credentials = btoa(`${username}:${password}`); sessionStorage.setItem('minegocio_credentials', credentials); sessionStorage.setItem('minegocio_username', username) }

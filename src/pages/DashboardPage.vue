@@ -10,6 +10,7 @@ import {
   Store,
   Truck,
   Users,
+  UserCog,
 } from 'lucide-vue-next'
 import Sidebar from '../components/Sidebar.vue'
 import UserProfileModal from '../components/UserProfileModal.vue'
@@ -19,9 +20,10 @@ import PedidosPage from './PedidosPage.vue'
 import ClientesPage from './ClientesPage.vue'
 import ProveedoresPage from './ProveedoresPage.vue'
 import NuevoCatalogoPage from './NuevoCatalogoPage.vue'
+import UsuariosPage from './UsuariosPage.vue'
 import { api, clearCredentials, currentUsername, type Catalogo, type Producto, type Variante } from '../api.ts'
 
-type View = 'dashboard' | 'catalogo' | 'nuevo-catalogo' | 'inventario' | 'pedidos' | 'clientes' | 'proveedores'
+type View = 'dashboard' | 'catalogo' | 'nuevo-catalogo' | 'inventario' | 'pedidos' | 'clientes' | 'proveedores' | 'usuarios'
 
 const props = defineProps<{
   products: Producto[]
@@ -46,12 +48,13 @@ const profile = ref({
   correo: '',
   telefono: '',
   fotoPerfil: '',
+  rol: 'USER' as 'USER' | 'ADMIN',
 })
 
 const dashboardProducts = ref<Producto[]>(props.products)
 const dashboardCatalogs = ref<Catalogo[]>(props.catalogs)
 
-const items = [
+const baseItems = [
   { id: 'dashboard' as View, label: 'Resumen', icon: LayoutDashboard },
   { id: 'catalogo' as View, label: 'Catálogos', icon: Store },
   { id: 'inventario' as View, label: 'Inventario', icon: Boxes },
@@ -59,13 +62,16 @@ const items = [
   { id: 'clientes' as View, label: 'Clientes', icon: Users },
   { id: 'proveedores' as View, label: 'Proveedores', icon: Truck },
 ]
+const items = computed(() => profile.value.rol === 'ADMIN'
+  ? [...baseItems, { id: 'usuarios' as View, label: 'Usuarios', icon: UserCog }]
+  : baseItems)
 
 const totalProducts = computed(() => dashboardProducts.value.length)
 const totalVariants = computed(() => props.variants.length)
 const activeCatalogs = computed(() => dashboardCatalogs.value.filter((catalog) => catalog.activo !== false).length)
 const lowStock = computed(() => props.variants.filter((variant) => variant.existencia <= variant.existenciaMinima).length)
 const recentCatalogs = computed(() => dashboardCatalogs.value.slice(0, 5))
-const pageTitle = computed(() => items.find((item) => item.id === activeView.value)?.label || 'Resumen')
+const pageTitle = computed(() => items.value.find((item) => item.id === activeView.value)?.label || 'Resumen')
 const pageComponents = {
   catalogo: MisCatalogosPage,
   'nuevo-catalogo': NuevoCatalogoPage,
@@ -73,6 +79,7 @@ const pageComponents = {
   pedidos: PedidosPage,
   clientes: ClientesPage,
   proveedores: ProveedoresPage,
+  usuarios: UsuariosPage,
 } as const
 const currentPage = computed(() => pageComponents[activeView.value as keyof typeof pageComponents])
 
@@ -84,6 +91,7 @@ const viewPaths: Record<View, string> = {
   pedidos: '/pedidos',
   clientes: '/clientes',
   proveedores: '/proveedores',
+  usuarios: '/usuarios',
 }
 
 function viewFromPath(path: string): View {
@@ -154,6 +162,7 @@ onMounted(async () => {
       correo?: string
       wapp?: string
       urlFotoPerfil?: string
+      rol?: 'USER' | 'ADMIN'
     }>()
 
     profile.value = {
@@ -164,6 +173,7 @@ onMounted(async () => {
       correo: user.correo || '',
       telefono: user.wapp || '',
       fotoPerfil: user.urlFotoPerfil || '',
+      rol: user.rol || 'USER',
     }
     username.value = profile.value.nombreUsuario
     dashboardCatalogs.value = await api.catalogosUsuario<Catalogo>(profile.value.id)
@@ -190,7 +200,7 @@ function handlePopState() {
       :items="items"
       :active-view="activeView"
       :username="username"
-      :is-superadmin="true"
+      :is-superadmin="profile.rol === 'ADMIN'"
       :mobile-open="mobileOpen"
       @select="selectView"
       @toggle-mobile="mobileOpen = !mobileOpen"
