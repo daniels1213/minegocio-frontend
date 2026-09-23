@@ -1,0 +1,5 @@
+<script setup lang="ts">
+import { ShoppingCart } from 'lucide-vue-next'
+</script>
+<template><section class="purchase-page"><div class="icon"><ShoppingCart :size="25" /></div><p class="eyebrow">Abastecimiento</p><h2>Compras</h2><p>El modelo de compras todavía no existe en el backend. Por ahora puedes registrar entradas desde Inventario; cuando se agregue la entidad de compras, esta vista queda lista para conectarla.</p></section></template>
+<style scoped>.purchase-page{min-height:calc(100vh - 140px);display:grid;place-content:center;justify-items:center;padding:32px;text-align:center;color:#17332a}.icon{width:56px;height:56px;display:grid;place-items:center;border-radius:16px;background:#fff1cf;color:#98701d}.eyebrow{margin:18px 0 0;color:#6c8175;font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}.purchase-page h2{margin:10px 0 8px;font:700 clamp(28px,4vw,42px) 'Space Grotesk',Arial,sans-serif}.purchase-page p:last-child{max-width:520px;margin:0;color:#75847b;line-height:1.6}</style>

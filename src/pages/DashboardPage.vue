@@ -11,13 +11,19 @@ import {
   Store,
   Truck,
   Users,
-  X,
 } from 'lucide-vue-next'
-import Sidebar from '../../components/Sidebar.vue'
-import UserProfileModal from '../../components/UserProfileModal.vue'
-import { api, clearCredentials, currentUsername, type Catalogo, type Producto, type Variante } from '../../api'
+import Sidebar from '../components/Sidebar.vue'
+import UserProfileModal from '../components/UserProfileModal.vue'
+import MisCatalogosPage from './MisCatalogosPage.vue'
+import InventarioPage from './InventarioPage.vue'
+import PedidosPage from './PedidosPage.vue'
+import ComprasPage from './ComprasPage.vue'
+import ClientesPage from './ClientesPage.vue'
+import ProveedoresPage from './ProveedoresPage.vue'
+import NuevoCatalogoPage from './NuevoCatalogoPage.vue'
+import { api, clearCredentials, currentUsername, type Catalogo, type Producto, type Variante } from '../api.ts'
 
-type View = 'dashboard' | 'catalogo' | 'inventario' | 'pedidos' | 'compras' | 'clientes' | 'proveedores' | 'usuarios'
+type View = 'dashboard' | 'catalogo' | 'nuevo-catalogo' | 'inventario' | 'pedidos' | 'compras' | 'clientes' | 'proveedores'
 
 const props = defineProps<{
   products: Producto[]
@@ -35,6 +41,7 @@ const profileVisible = ref(false)
 const username = ref(currentUsername() || 'Administrador')
 
 const profile = ref({
+  id: 0,
   nombreUsuario: username.value,
   nombre: 'Administrador',
   apellido: '',
@@ -42,6 +49,9 @@ const profile = ref({
   telefono: '',
   fotoPerfil: '',
 })
+
+const dashboardProducts = ref<Producto[]>(props.products)
+const dashboardCatalogs = ref<Catalogo[]>(props.catalogs)
 
 const items = [
   { id: 'dashboard' as View, label: 'Resumen', icon: LayoutDashboard },
@@ -53,20 +63,51 @@ const items = [
   { id: 'proveedores' as View, label: 'Proveedores', icon: Truck },
 ]
 
-const totalProducts = computed(() => props.products.length)
+const totalProducts = computed(() => dashboardProducts.value.length)
 const totalVariants = computed(() => props.variants.length)
-const activeCatalogs = computed(() => props.catalogs.filter((catalog) => catalog.activo).length)
+const activeCatalogs = computed(() => dashboardCatalogs.value.filter((catalog) => catalog.activo !== false).length)
 const lowStock = computed(() => props.variants.filter((variant) => variant.existencia <= variant.existenciaMinima).length)
-const recentCatalogs = computed(() => props.catalogs.slice(0, 5))
+const recentCatalogs = computed(() => dashboardCatalogs.value.slice(0, 5))
 const pageTitle = computed(() => items.find((item) => item.id === activeView.value)?.label || 'Resumen')
+const pageComponents = {
+  catalogo: MisCatalogosPage,
+  'nuevo-catalogo': NuevoCatalogoPage,
+  inventario: InventarioPage,
+  pedidos: PedidosPage,
+  compras: ComprasPage,
+  clientes: ClientesPage,
+  proveedores: ProveedoresPage,
+} as const
+const currentPage = computed(() => pageComponents[activeView.value as keyof typeof pageComponents])
 
-watch(mobileOpen, (isOpen) => {
-  document.body.style.overflow = isOpen ? 'hidden' : ''
-})
+const viewPaths: Record<View, string> = {
+  dashboard: '/dashboard',
+  catalogo: '/mis-catalogos',
+  'nuevo-catalogo': '/mis-catalogos/nuevo',
+  inventario: '/inventario',
+  pedidos: '/pedidos',
+  compras: '/compras',
+  clientes: '/clientes',
+  proveedores: '/proveedores',
+}
+
+function viewFromPath(path: string): View {
+  const entry = Object.entries(viewPaths).find(([, viewPath]) => viewPath === path)
+  return (entry?.[0] as View | undefined) || 'dashboard'
+}
+
+watch(
+  [mobileOpen, profileVisible],
+  ([mobileIsOpen, profileIsOpen]) => {
+    document.body.style.overflow =
+      mobileIsOpen || profileIsOpen ? 'hidden' : ''
+  }
+)
 
 function selectView(view: View) {
   activeView.value = view
   mobileOpen.value = false
+  window.history.pushState({}, '', viewPaths[view])
 }
 
 function openProfile() {
@@ -77,7 +118,22 @@ function closeProfile() {
   profileVisible.value = false
 }
 
-function saveProfile() {
+async function saveProfile(password?: { current: string; next: string }) {
+  if (!profile.value.id) return
+
+  await api.update('usuarios', profile.value.id, {
+    nombre: profile.value.nombre,
+    wapp: profile.value.telefono,
+    urlFotoPerfil: profile.value.fotoPerfil,
+  })
+
+  if (password) {
+    await api.changePassword(profile.value.id, {
+      passwordActual: password.current,
+      nuevaPassword: password.next,
+    })
+  }
+
   username.value = profile.value.nombreUsuario || username.value
   profileVisible.value = false
 }
@@ -88,8 +144,15 @@ function logout() {
 }
 
 onMounted(async () => {
+  activeView.value = viewFromPath(window.location.pathname)
+  window.addEventListener('popstate', handlePopState)
+
+  const products = await api.list<Producto>('productos').catch(() => null)
+  if (products) dashboardProducts.value = products
+
   try {
     const user = await api.me<{
+      id: number
       username?: string
       nombre?: string
       apellido?: string
@@ -99,6 +162,7 @@ onMounted(async () => {
     }>()
 
     profile.value = {
+      id: user.id,
       nombreUsuario: user.username || profile.value.nombreUsuario,
       nombre: user.nombre || profile.value.nombre,
       apellido: user.apellido || '',
@@ -107,6 +171,7 @@ onMounted(async () => {
       fotoPerfil: user.urlFotoPerfil || '',
     }
     username.value = profile.value.nombreUsuario
+    dashboardCatalogs.value = await api.catalogosUsuario<Catalogo>(profile.value.id)
   } catch {
     // Keep the dashboard usable when the profile request is unavailable.
   }
@@ -114,7 +179,12 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   document.body.style.overflow = ''
+  window.removeEventListener('popstate', handlePopState)
 })
+
+function handlePopState() {
+  activeView.value = viewFromPath(window.location.pathname)
+}
 </script>
 
 <template>
@@ -133,7 +203,7 @@ onBeforeUnmount(() => {
       @logout="logout"
     />
 
-    <main class="dashboard-main">
+    <main class="dashboard-main overflow-y-auto ">
       <header class="topbar">
         <button class="mobile-menu" type="button" aria-label="Abrir menú" @click="mobileOpen = true">
           <Menu :size="20" />
@@ -178,7 +248,7 @@ onBeforeUnmount(() => {
               <div v-for="catalog in recentCatalogs" :key="catalog.id ?? catalog.nombre" class="catalog-row">
                 <span class="catalog-icon"><Store :size="17" /></span>
                 <div><strong>{{ catalog.nombre }}</strong><small>{{ catalog.descripcion || 'Sin descripción disponible' }}</small></div>
-                <span class="status" :class="catalog.activo ? 'status-on' : 'status-off'">{{ catalog.activo ? 'Activo' : 'Inactivo' }}</span>
+                <span class="status" :class="catalog.activo === false ? 'status-off' : 'status-on'">{{ catalog.activo === false ? 'Inactivo' : 'Activo' }}</span>
               </div>
             </div>
             <div v-else class="empty-state"><Store :size="24" /><p>Aún no hay catálogos para mostrar.</p></div>
@@ -193,13 +263,14 @@ onBeforeUnmount(() => {
         </div>
       </section>
 
-      <section v-else class="placeholder-view">
-        <div class="placeholder-icon"><X :size="22" /></div>
-        <p class="eyebrow">Módulo seleccionado</p>
-        <h2>{{ pageTitle }}</h2>
-        <p class="muted">La navegación ya está preparada para conectar este módulo con sus operaciones.</p>
-        <button class="primary-action" type="button" @click="selectView('dashboard')"><LayoutDashboard :size="17" />Volver al resumen</button>
-      </section>
+      <component
+        :is="currentPage"
+        v-else
+        :usuario-id="profile.id"
+        @create="selectView('nuevo-catalogo')"
+        @cancel="selectView('catalogo')"
+        @created="selectView('catalogo')"
+      />
     </main>
 
     <UserProfileModal
@@ -221,7 +292,7 @@ onBeforeUnmount(() => {
 :global(*) { box-sizing: border-box; }
 :global(body) { margin: 0; font-family: Arial, sans-serif; background: #f7f8f4; color: #17332a; }
 .dashboard-shell { min-height: 100vh; display: flex; background: #f7f8f4; }
-.dashboard-main { min-width: 0; flex: 1; margin-left: 260px; padding: 0 4.5% 42px; }
+.dashboard-main { min-width: 80%; flex: 1; margin-left: 260px; padding: 0 4.5% 42px; }
 .topbar { min-height: 92px; display: flex; align-items: center; justify-content: space-between; gap: 24px; border-bottom: 1px solid #e7ebe4; }
 .breadcrumb, .eyebrow { color: #6c8175; font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
 .topbar h1 { margin: 7px 0 0; font: 700 28px 'Space Grotesk', Arial, sans-serif; letter-spacing: -.7px; }
