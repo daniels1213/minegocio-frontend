@@ -7,7 +7,6 @@ import {
   Menu,
   Package,
   ShoppingBag,
-  ShoppingCart,
   Store,
   Truck,
   Users,
@@ -17,13 +16,12 @@ import UserProfileModal from '../components/UserProfileModal.vue'
 import MisCatalogosPage from './MisCatalogosPage.vue'
 import InventarioPage from './InventarioPage.vue'
 import PedidosPage from './PedidosPage.vue'
-import ComprasPage from './ComprasPage.vue'
 import ClientesPage from './ClientesPage.vue'
 import ProveedoresPage from './ProveedoresPage.vue'
 import NuevoCatalogoPage from './NuevoCatalogoPage.vue'
 import { api, clearCredentials, currentUsername, type Catalogo, type Producto, type Variante } from '../api.ts'
 
-type View = 'dashboard' | 'catalogo' | 'nuevo-catalogo' | 'inventario' | 'pedidos' | 'compras' | 'clientes' | 'proveedores'
+type View = 'dashboard' | 'catalogo' | 'nuevo-catalogo' | 'inventario' | 'pedidos' | 'clientes' | 'proveedores'
 
 const props = defineProps<{
   products: Producto[]
@@ -58,7 +56,6 @@ const items = [
   { id: 'catalogo' as View, label: 'Catálogos', icon: Store },
   { id: 'inventario' as View, label: 'Inventario', icon: Boxes },
   { id: 'pedidos' as View, label: 'Pedidos', icon: ClipboardList },
-  { id: 'compras' as View, label: 'Compras', icon: ShoppingCart },
   { id: 'clientes' as View, label: 'Clientes', icon: Users },
   { id: 'proveedores' as View, label: 'Proveedores', icon: Truck },
 ]
@@ -74,7 +71,6 @@ const pageComponents = {
   'nuevo-catalogo': NuevoCatalogoPage,
   inventario: InventarioPage,
   pedidos: PedidosPage,
-  compras: ComprasPage,
   clientes: ClientesPage,
   proveedores: ProveedoresPage,
 } as const
@@ -86,7 +82,6 @@ const viewPaths: Record<View, string> = {
   'nuevo-catalogo': '/mis-catalogos/nuevo',
   inventario: '/inventario',
   pedidos: '/pedidos',
-  compras: '/compras',
   clientes: '/clientes',
   proveedores: '/proveedores',
 }
@@ -238,7 +233,7 @@ function handlePopState() {
           <article class="metric-card metric-green"><div class="metric-icon"><Package :size="20" /></div><span>Productos</span><strong>{{ totalProducts }}</strong><small>Registrados en el sistema</small></article>
           <article class="metric-card metric-gold"><div class="metric-icon"><ShoppingBag :size="20" /></div><span>Variantes</span><strong>{{ totalVariants }}</strong><small>Disponibles para vender</small></article>
           <article class="metric-card metric-blue"><div class="metric-icon"><Store :size="20" /></div><span>Catálogos activos</span><strong>{{ activeCatalogs }}</strong><small>Publicados actualmente</small></article>
-          <article class="metric-card metric-coral"><div class="metric-icon"><ShoppingCart :size="20" /></div><span>Stock bajo</span><strong>{{ lowStock }}</strong><small>Requieren atención</small></article>
+          <article class="metric-card metric-coral"><div class="metric-icon"><Package :size="20" /></div><span>Stock bajo</span><strong>{{ lowStock }}</strong><small>Requieren atención</small></article>
         </div>
 
         <div class="content-grid">
