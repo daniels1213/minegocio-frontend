@@ -4,10 +4,10 @@ export interface EntityReference { id: number; label: string }
 export interface Cliente { id?: number; nombre: string; telefono?: string; correo?: string; ciudad?: string; direccion?: string }
 export interface Proveedor { id?: number; nombre?: string; personaContacto?: string; telefono?: string; correo?: string; activo: boolean }
 export interface Producto { id?: number; seccionId: number; catalogoId?: number; nombre?: string; descripcionCorta?: string; moneda?: string; activo: boolean; visibleCatalogo: boolean; destacado: boolean }
-export interface Catalogo { id?: number; usuarioId?: number; nombre: string; descripcion?: string; etiquetas?: string[]; fotoPortada?: string; visibleEnPaginaPrincipal: boolean; activo: boolean }
+export interface Catalogo { id?: number; usuarioId?: number; nombre: string; descripcion?: string; etiquetas?: string[]; urlFotoPortada?: string; fechaCreacion?: string; activo?: boolean }
 export interface Variante { id?: number; productoId: number; codigo: string; nombre: string; precio: number; existencia: number; existenciaMinima: number; activa: boolean }
 export interface DetallePedido { varianteProductoId: number; cantidad: number; precioUnitario: number; subtotal?: number }
-export interface Pedido { id?: number; numeroPedido?: string; clienteId: number; estado?: EstadoPedido; subtotal: number; costoEntrega?: number; total: number; moneda?: string; detalles?: DetallePedido[]; fechaCreacion?: string }
+export interface Pedido { id?: number; numeroPedido?: string; clienteId: number; estado?: EstadoPedido; subtotal: number; costoEntrega?: number; total: number; moneda?: string; detalles?: DetallePedido[]; fechaCreacion?: string; fecha?: string; ingresoTotal?: number }
 export interface Compra { id?: number; numeroCompra?: string; proveedorId: number; estado?: string; subtotal: number; costoAdicional?: number; total: number; moneda?: string; fechaCreacion?: string }
 export interface Movimiento { id: number; varianteProductoId: number; tipo: TipoMovimiento; cantidad: number; existenciaAnterior: number; existenciaNueva: number; motivo?: string; fechaCreacion?: string }
 export interface Usuario { id: number; nombreUsuario: string; nombre: string; apellido?: string; correo?: string; telefono?: string; fotoPerfil?: string; esSuperadministrador: boolean; activo: boolean }
@@ -56,11 +56,23 @@ export const api = {
 	catalogosTodos: <T>() => request<T[]>('/api/catalogos/all'),
 	catalogosPublicos: <T>() => request<T[]>('/api/catalogos/publicos'),
 	catalogosUsuario: <T>(usuarioId: number) => request<T[]>(`/api/catalogos/usuario/${usuarioId}`),
+	createCatalogo: <T>(usuarioId: number, payload: unknown) => request<T>(`/api/catalogos?usuarioId=${usuarioId}`, {
+		method: 'POST',
+		body: JSON.stringify(payload),
+	}),
 	create: <T>(resource: string, payload: unknown) => request<T>(`/api/${resource}`, {
 		method: 'POST',
 		body: JSON.stringify(payload),
 	}),
 	update: <T>(resource: string, id: number, payload: unknown) => request<T>(`/api/${resource}/${id}`, {
+		method: 'PUT',
+		body: JSON.stringify(payload),
+	}),
+	updatePedidoEstado: <T>(id: number, estado: EstadoPedido) => request<T>(`/api/pedidos/${id}/estado`, {
+		method: 'PUT',
+		body: JSON.stringify({ estado }),
+	}),
+	changePassword: (id: number, payload: { passwordActual: string; nuevaPassword: string }) => request<void>(`/api/usuarios/${id}/password`, {
 		method: 'PUT',
 		body: JSON.stringify(payload),
 	}),

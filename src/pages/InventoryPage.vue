@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Variante } from '../../api'
+import type { Variante } from '../api'
 
 const props = defineProps<{
   variants: Variante[]

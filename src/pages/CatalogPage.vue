@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { Search, Package, Store, Shield, Tag } from 'lucide-vue-next'
-import LoginModal from '../../components/LoginModal.vue'
-import { api, setCredentials, type Catalogo, type Usuario } from '../../api'
+import LoginModal from '../components/LoginModal.vue'
+import FormAddUser from '../components/FormAddUser.vue'
+import { api, setCredentials, type Catalogo, type Usuario } from '../api.ts'
 
 const emit = defineEmits<{
   (e: 'authenticated'): void
@@ -18,6 +19,18 @@ const username = ref('')
 const password = ref('')
 const loginError = ref('')
 const loginLoading = ref(false)
+const showFormAddModal = ref(false)
+const formaddError = ref('')
+
+function openAddUser() {
+  formaddError.value = ''
+  showFormAddModal.value = true
+}
+
+function closeAddUser() {
+  showFormAddModal.value = false
+  formaddError.value = ''
+}
 
 const normalizedCatalogs = computed(() => {
   return catalogs.value.map((catalog) => {
@@ -134,10 +147,6 @@ async function submitLogin() {
   }
 }
 
-function addCatalog() {
-  console.log('Añadir catálogo')
-}
-
 onMounted(() => {
   loadCatalogs()
 })
@@ -171,7 +180,7 @@ onMounted(() => {
         <button
           class="add-catalog-btn"
           type="button"
-          @click="addCatalog"
+          @click="openAddUser"
         >
           Añade tu catálogo
         </button>
@@ -402,11 +411,11 @@ onMounted(() => {
             <span
               class="status"
               :class="{
-                inactive: !catalog.activo
+                inactive: catalog.activo === false
               }"
             >
               {{
-                catalog.activo
+                catalog.activo !== false
                   ? 'Activo'
                   : 'Inactivo'
               }}
@@ -484,6 +493,13 @@ onMounted(() => {
     @update:username="username = $event"
     @update:password="password = $event"
   />
+
+  <FormAddUser
+    :visible="showFormAddModal"
+    :error="formaddError"
+    @close="closeAddUser"   
+  />
+  
 </template>
 
 

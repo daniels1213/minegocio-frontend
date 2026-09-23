@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import CatalogPage from './pages/catalog/CatalogPage.vue'
-import DashboardPage from './pages/dashboard/DashboardPage.vue'
+import CatalogPage from './pages/CatalogPage.vue'
+import DashboardPage from './pages/DashboardPage.vue'
 import { hasCredentials } from './api'
 
 const isAuthenticated = ref(hasCredentials())
