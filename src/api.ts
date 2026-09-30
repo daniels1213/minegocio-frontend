@@ -1,16 +1,17 @@
 export type EstadoPedido = 'PENDIENTE' | 'CONFIRMADO' | 'PREPARANDO' | 'LISTO' | 'EN_ENTREGA' | 'ENTREGADO' | 'CANCELADO'
-export type TipoMovimiento = 'ENTRADA' | 'VENTA' | 'AJUSTE' | 'DEVOLUCION' | 'DANIO' | 'PERDIDA'
+export type TipoMovimiento = 'COMPRA' | 'VENTA' | 'AJUSTE_INVENTARIO' | 'MERMA' | 'REGALO' | 'OTRO' | 'DEVOLUCION'
 export interface EntityReference { id: number; label: string }
 export interface Cliente { id?: number; nombre: string; telefono: string; direccion?: string }
 export interface Proveedor { id?: number; nombre?: string; telefono?: string; direccion?: string }
-export interface Producto { id?: number; nombre: string; descripcion?: string; stockActual: number; precioVenta: number; ultimoPrecioCompra?: number; fechaCreacion?: string }
+export interface Producto { id?: number; nombre: string; descripcion?: string; urlFoto?: string; stockActual: number; precioVenta: number; ultimoPrecioCompra?: number; fechaCreacion?: string }
 export interface Catalogo { id?: number; usuarioId?: number; nombre: string; descripcion?: string; etiquetas?: string[]; urlFotoPortada?: string; fechaCreacion?: string; activo?: boolean }
+export interface CatalogoProducto { productoId: number; nombre: string; descripcion?: string; orden: number; urlFoto?: string; precioVenta?: number | string }
 export interface Variante { id?: number; productoId: number; codigo: string; nombre: string; precio: number; existencia: number; existenciaMinima: number; activa: boolean }
 export interface DetallePedido { varianteProductoId: number; cantidad: number; precioUnitario: number; subtotal?: number }
 export interface Pedido { id?: number; numeroPedido?: string; clienteId: number; estado?: EstadoPedido; subtotal: number; costoEntrega?: number; total: number; moneda?: string; detalles?: DetallePedido[]; fechaCreacion?: string; fecha?: string; ingresoTotal?: number }
 export interface Movimiento { id: number; varianteProductoId: number; tipo: TipoMovimiento; cantidad: number; existenciaAnterior: number; existenciaNueva: number; motivo?: string; fechaCreacion?: string }
 export interface Usuario { id: number; username: string; nombre: string; wapp: string; rol: 'USER' | 'ADMIN'; urlFotoPerfil?: string; fechaCreacion?: string }
-const baseUrl = import.meta.env.VITE_API_URL || 'https://minegocio-backend.onrender.com'
+const baseUrl = import.meta.env.DEV ? '' : import.meta.env.VITE_API_URL || 'https://minegocio-backend.onrender.com'
 let credentials = sessionStorage.getItem('minegocio_credentials') || ''
 export function setCredentials(username: string, password: string) { credentials = btoa(`${username}:${password}`); sessionStorage.setItem('minegocio_credentials', credentials); sessionStorage.setItem('minegocio_username', username) }
 export function clearCredentials() { credentials = ''; sessionStorage.removeItem('minegocio_credentials'); sessionStorage.removeItem('minegocio_username') }
@@ -33,14 +34,18 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 	}
 
 	if (!response.ok) {
+		const responseText = await response.text()
+		const body = (() => {
+			try { return JSON.parse(responseText) }
+			catch { return null }
+		})()
 		if (response.status === 401) {
 			clearCredentials()
 			throw new Error('Usuario o contraseña incorrectos')
 		}
 		if (response.status === 403) {
-			throw new Error('Tu usuario no tiene permisos para administrar este panel')
+			throw new Error(body?.detail || body?.message || responseText || 'Tu usuario no tiene permisos para administrar este panel')
 		}
-		const body = await response.json().catch(() => null)
 		throw new Error(body?.detail || body?.message || `Error ${response.status}`)
 	}
 
@@ -53,8 +58,21 @@ export const api = {
 	list: <T>(resource: string) => request<T[]>(`/api/${resource}`),
 	me: <T>() => request<T>('/api/usuarios/me'),
 	catalogosTodos: <T>() => request<T[]>('/api/catalogos/all'),
+	catalogoPorId: <T>(id: number) => request<T>(`/api/catalogos/${id}`),
+	catalogoProductos: <T>(catalogoId: number) => request<T[]>(`/api/catalogos/${catalogoId}/productos`),
 	catalogosPublicos: <T>() => request<T[]>('/api/catalogos/publicos'),
 	catalogosUsuario: <T>(usuarioId: number) => request<T[]>(`/api/catalogos/usuario/${usuarioId}`),
+	catalogosAdminUsuario: <T>(usuarioId: number) => request<T[]>(`/api/catalogos/admin/usuario/${usuarioId}`),
+	updateCatalogo: <T>(usuarioId: number, id: number, payload: unknown) => request<T>(`/api/catalogos/${id}?usuarioId=${usuarioId}`, {
+		method: 'PUT',
+		body: JSON.stringify(payload),
+	}),
+	deleteCatalogo: (usuarioId: number, id: number) => request<void>(`/api/catalogos/${id}?usuarioId=${usuarioId}`, {
+		method: 'DELETE',
+	}),
+	deleteCatalogoAdmin: (id: number) => request<void>(`/api/catalogos/admin/${id}`, {
+		method: 'DELETE',
+	}),
 	createCatalogo: <T>(usuarioId: number, payload: unknown) => request<T>(`/api/catalogos?usuarioId=${usuarioId}`, {
 		method: 'POST',
 		body: JSON.stringify(payload),
@@ -79,7 +97,7 @@ export const api = {
 		method: 'PUT',
 		body: JSON.stringify(payload),
 	}),
-	movement: (payload: unknown) => request<Movimiento>('/api/inventario/movimientos', {
+	movement: (payload: unknown) => request<void>('/api/inventario/movimientos', {
 		method: 'POST',
 		body: JSON.stringify(payload),
 	}),

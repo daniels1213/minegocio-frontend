@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { AlertCircle, Plus, RefreshCw, Store } from 'lucide-vue-next'
+import { AlertCircle, Pencil, Plus, RefreshCw, Store, Trash2 } from 'lucide-vue-next'
 import type { Catalogo } from '../api.ts'
 import { api } from '../api.ts'
 
@@ -10,11 +10,13 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'create'): void
+  (e: 'edit', catalog: Catalogo): void
 }>()
 
 const catalogs = ref<Catalogo[]>([])
 const loading = ref(false)
 const error = ref('')
+const removingId = ref<number | null>(null)
 
 async function loadCatalogs() {
   if (!props.usuarioId) return
@@ -30,6 +32,21 @@ async function loadCatalogs() {
       : 'No se pudieron cargar tus catálogos.'
   } finally {
     loading.value = false
+  }
+}
+
+async function removeCatalog(catalog: Catalogo) {
+  if (!catalog.id || !window.confirm(`¿Eliminar el catálogo "${catalog.nombre}"?`)) return
+
+  removingId.value = catalog.id
+  error.value = ''
+  try {
+    await api.deleteCatalogo(props.usuarioId, catalog.id)
+    catalogs.value = catalogs.value.filter((item) => item.id !== catalog.id)
+  } catch (reason) {
+    error.value = reason instanceof Error ? reason.message : 'No se pudo eliminar el catálogo.'
+  } finally {
+    removingId.value = null
   }
 }
 
@@ -84,6 +101,10 @@ watch(
         <div class="catalog-info">
           <h3>{{ catalog.nombre }}</h3>
           <p>{{ catalog.descripcion || 'Sin descripción disponible.' }}</p>
+          <div class="catalog-actions">
+            <button class="secondary-action" type="button" @click="emit('edit', catalog)"><Pencil :size="15" /> Editar</button>
+            <button class="delete-action" type="button" :disabled="removingId === catalog.id" @click="removeCatalog(catalog)"><Trash2 :size="15" /> {{ removingId === catalog.id ? 'Eliminando...' : 'Eliminar' }}</button>
+          </div>
         </div>
       </article>
     </div>
@@ -116,6 +137,9 @@ h2 { margin: 8px 0 7px; color: #17332a; font: 700 clamp(28px, 4vw, 42px) 'Space 
 .catalog-info { padding: 18px; }
 .catalog-info h3 { margin: 0 0 7px; color: #17332a; }
 .catalog-info p { margin: 0; line-height: 1.5; }
+.catalog-actions { display: flex; gap: 8px; margin-top: 18px; }
+.delete-action { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 0; border-radius: 10px; padding: 12px 15px; background: #f8e9e6; color: #a8584e; font-weight: 700; cursor: pointer; }
+.delete-action:disabled { opacity: .6; cursor: wait; }
 .spin { animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (max-width: 680px) { .page-heading { align-items: start; flex-direction: column; } .catalog-grid { grid-template-columns: 1fr; } }

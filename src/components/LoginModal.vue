@@ -19,7 +19,7 @@ const emit = defineEmits<{
 
 <template>
   <div v-if="props.visible" class="admin-overlay" @click.self="emit('close')">
-    <form class="login-card admin-card" @submit.prevent="emit('submit')">
+    <form class="login-card admin-card" autocomplete="off" @submit.prevent="emit('submit')">
       <button type="button" class="close-modal" aria-label="Cerrar" @click="emit('close')">
         <X :size="18" />
       </button>
@@ -29,11 +29,11 @@ const emit = defineEmits<{
 
       <div class="field">
         <label for="username">Usuario</label>
-        <input id="username" :value="props.username" @input="emit('update:username', ($event.target as HTMLInputElement).value)" required autocomplete="username" placeholder="tu.usuario" />
+        <input id="username" :value="props.username" @input="emit('update:username', ($event.target as HTMLInputElement).value)" required autocomplete="off" placeholder="tu.usuario" />
       </div>
       <div class="field">
         <label for="password">Contraseña</label>
-        <input id="password" :value="props.password" @input="emit('update:password', ($event.target as HTMLInputElement).value)" required type="password" autocomplete="current-password" placeholder="••••••••" />
+        <input id="password" :value="props.password" @input="emit('update:password', ($event.target as HTMLInputElement).value)" required type="password" autocomplete="new-password" placeholder="••••••••" />
       </div>
 
       <p v-if="props.error" class="error">{{ props.error }}</p>
@@ -49,6 +49,8 @@ const emit = defineEmits<{
 .admin-overlay {
   position: fixed;
   inset: 0;
+  overflow-y: auto;
+  padding: 16px;
   background: rgba(17, 20, 19, 0.52);
   display: grid;
   place-items: center;
@@ -56,6 +58,8 @@ const emit = defineEmits<{
 }
 .login-card {
   width: min(100%, 420px);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
   background: #fffefa;
   border: 1px solid #e5ebe3;
   box-shadow: 0 22px 70px rgba(17, 39, 31, 0.2);

@@ -70,6 +70,8 @@ function contactOnWhatsApp() {
 .admin-overlay {
   position: fixed;
   inset: 0;
+  overflow-y: auto;
+  padding: 16px;
   background: rgba(17, 20, 19, 0.52);
   display: grid;
   place-items: center;
@@ -77,6 +79,8 @@ function contactOnWhatsApp() {
 }
 .login-card {
   width: min(100%, 420px);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
   background: #fffefa;
   border: 1px solid #e5ebe3;
   box-shadow: 0 22px 70px rgba(17, 39, 31, 0.2);

@@ -36,6 +36,8 @@ const emit = defineEmits<{
 }>()
 
 const activeView = ref<View>('dashboard')
+const catalogToEdit = ref<Catalogo | null>(null)
+const catalogFormVisible = ref(false)
 const mobileOpen = ref(false)
 const profileVisible = ref(false)
 const username = ref(currentUsername() || 'Administrador')
@@ -99,6 +101,19 @@ function viewFromPath(path: string): View {
   return (entry?.[0] as View | undefined) || 'dashboard'
 }
 
+function syncLocation() {
+  const requestedView = viewFromPath(window.location.pathname)
+  if (requestedView === 'nuevo-catalogo') {
+    activeView.value = 'catalogo'
+    catalogToEdit.value = null
+    catalogFormVisible.value = true
+    return
+  }
+
+  activeView.value = requestedView
+  catalogFormVisible.value = false
+}
+
 watch(
   [mobileOpen, profileVisible],
   ([mobileIsOpen, profileIsOpen]) => {
@@ -111,6 +126,29 @@ function selectView(view: View) {
   activeView.value = view
   mobileOpen.value = false
   window.history.pushState({}, '', viewPaths[view])
+}
+
+function createCatalog() {
+  catalogToEdit.value = null
+  catalogFormVisible.value = true
+  if (activeView.value !== 'catalogo') selectView('catalogo')
+}
+
+function editCatalog(catalog: Catalogo) {
+  catalogToEdit.value = catalog
+  catalogFormVisible.value = true
+  if (activeView.value !== 'catalogo') selectView('catalogo')
+}
+
+function catalogSaved() {
+  catalogFormVisible.value = false
+  catalogToEdit.value = null
+  selectView('catalogo')
+}
+
+function closeCatalogForm() {
+  catalogFormVisible.value = false
+  catalogToEdit.value = null
 }
 
 function openProfile() {
@@ -147,7 +185,7 @@ function logout() {
 }
 
 onMounted(async () => {
-  activeView.value = viewFromPath(window.location.pathname)
+  syncLocation()
   window.addEventListener('popstate', handlePopState)
 
   const products = await api.list<Producto>('productos').catch(() => null)
@@ -188,7 +226,7 @@ onBeforeUnmount(() => {
 })
 
 function handlePopState() {
-  activeView.value = viewFromPath(window.location.pathname)
+  syncLocation()
 }
 </script>
 
@@ -272,9 +310,19 @@ function handlePopState() {
         :is="currentPage"
         v-else
         :usuario-id="profile.id"
-        @create="selectView('nuevo-catalogo')"
+        :catalog="activeView === 'nuevo-catalogo' ? catalogToEdit || undefined : undefined"
+        @create="createCatalog"
+        @edit="editCatalog"
         @cancel="selectView('catalogo')"
-        @created="selectView('catalogo')"
+        @created="catalogSaved"
+      />
+
+      <NuevoCatalogoPage
+        v-if="catalogFormVisible && activeView === 'catalogo'"
+        :usuario-id="profile.id"
+        :catalog="catalogToEdit || undefined"
+        @cancel="closeCatalogForm"
+        @created="catalogSaved"
       />
     </main>
 
