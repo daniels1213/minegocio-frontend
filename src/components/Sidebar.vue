@@ -2,7 +2,7 @@
 import { LogOut, Package } from 'lucide-vue-next'
 import type { Component } from 'vue'
 
-type View = 'dashboard' | 'catalogo' | 'nuevo-catalogo' | 'inventario' | 'pedidos' | 'clientes' | 'proveedores'
+type View = 'dashboard' | 'catalogo' | 'nuevo-catalogo' | 'inventario' | 'pedidos' | 'clientes' | 'proveedores' | 'usuarios'
 
 const props = defineProps<{
   items: Array<{ id: View; label: string; icon: Component }>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { X, User, Image, LoaderCircle } from 'lucide-vue-next'
 import { ref } from 'vue'
+import { uploadCloudinaryImage } from '../cloudinary.ts'
 
 const uploadingPhoto = ref(false)
 const uploadError = ref('')
@@ -59,47 +60,11 @@ async function uploadPhoto(event: Event) {
 
   if (!file) return
 
-  const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME
-  const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET
-
-  if (!cloudName || !uploadPreset) {
-    uploadError.value = 'Falta configurar Cloudinary en el archivo .env.'
-    input.value = ''
-    return
-  }
-
-  if (!file.type.startsWith('image/')) {
-    uploadError.value = 'Selecciona un archivo de imagen válido.'
-    input.value = ''
-    return
-  }
-
-  if (file.size > 5 * 1024 * 1024) {
-    uploadError.value = 'La imagen no puede superar los 5 MB.'
-    input.value = ''
-    return
-  }
-
   uploadingPhoto.value = true
   uploadError.value = ''
 
   try {
-    const body = new FormData()
-    body.append('file', file)
-    body.append('upload_preset', uploadPreset)
-
-    const response = await fetch(
-      `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
-      { method: 'POST', body },
-    )
-
-    const result = await response.json()
-
-    if (!response.ok || !result.secure_url) {
-      throw new Error(result.error?.message || 'No se pudo subir la imagen.')
-    }
-
-    emit('update:fotoPerfil', result.secure_url)
+    emit('update:fotoPerfil', await uploadCloudinaryImage(file, 'profile'))
   } catch (reason) {
     uploadError.value = reason instanceof Error
       ? reason.message
@@ -115,13 +80,13 @@ async function uploadPhoto(event: Event) {
   <!-- Overlay del modal -->
   <div
     v-if="props.visible"
-    class="fixed inset-0 z-[100] flex items-right justify-right bg-black/50"
+    class="fixed inset-0 z-[100] grid place-items-center overflow-y-auto bg-black/60 p-4"
     @click.self="emit('close')"
   >
 
     <!-- Contenido del modal -->
     <div
-      class="login-card relative max-h-[100vh] w-full max-w-2xl overflow-y-auto"
+      class="login-card relative max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-xl p-6"
     >
 
       <button
@@ -149,9 +114,7 @@ async function uploadPhoto(event: Event) {
           Foto de perfil
         </label>
 
-        <div
-          class="relative flex h-50 w-50 items-center justify-center overflow-hidden rounded-full shadow-lg"
-        >
+        <div class="relative flex h-40 w-40 items-center justify-center overflow-hidden rounded-full shadow-lg">
 
           <img
             v-if="props.form.fotoPerfil"
@@ -162,24 +125,18 @@ async function uploadPhoto(event: Event) {
 
           <User
             v-if="!props.form.fotoPerfil"
-            class="h-30 w-30"
+            class="h-24 w-24"
           />
+          <label
+            class="photo-upload-button"
+            :class="{ disabled: uploadingPhoto }"
+            title="Subir foto de perfil"
+          >
+            <LoaderCircle v-if="uploadingPhoto" :size="20" class="spin" />
+            <Image v-else :size="20" />
+            <input type="file" accept="image/*" :disabled="uploadingPhoto" @change="uploadPhoto" />
+          </label>
         </div>
-
-        <label
-          class="photo-upload-button"
-          :class="{ disabled: uploadingPhoto }"
-          title="Subir foto de perfil"
-        >
-          <LoaderCircle v-if="uploadingPhoto" :size="20" class="spin" />
-          <Image v-else :size="20" />
-          <input
-            type="file"
-            accept="image/*"
-            :disabled="uploadingPhoto"
-            @change="uploadPhoto"
-          />
-        </label>
         <!---
         <input
           :value="props.form.fotoPerfil"
@@ -339,11 +296,11 @@ async function uploadPhoto(event: Event) {
 .photo-upload-button {
   display: grid;
   place-items: center;
+  position: absolute;
+  right: 0;
+  bottom: 0;
   width: 42px;
   height: 42px;
-  margin-top: -52px;
-  margin-left: 140px;
-  position: relative;
   border-radius: 50%;
   background: white;
   cursor: pointer;
@@ -398,6 +355,12 @@ async function uploadPhoto(event: Event) {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
+}
+
+@media (max-width: 560px) {
+  .login-card { padding: 22px 18px; }
+  .form-actions { flex-direction: column-reverse; }
+  .form-actions .btn { width: 100%; }
 }
 
 .btn {
