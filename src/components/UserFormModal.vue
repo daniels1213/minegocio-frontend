@@ -35,18 +35,18 @@ watch(() => props.form, (value) => { form.value = { ...value } }, { deep: true }
 </template>
 
 <style scoped>
-.modal-layer{position:fixed;inset:0;z-index:100;display:grid;place-items:center;overflow-y:auto;padding:16px;background:rgba(16,35,49,.64)}
-.modal{width:min(520px,100%);max-height:calc(100dvh - 32px);overflow-y:auto;padding:24px;border:1px solid #d1dfe3;border-radius:12px;background:#fff;box-shadow:0 22px 70px rgba(10,31,44,.24)}
+.modal-layer{position:fixed;inset:0;z-index:100;display:grid;place-items:center;overflow-y:auto;padding:16px;background:rgba(0,0,0,.64)}
+.modal{width:min(520px,100%);max-height:calc(100dvh - 32px);overflow-y:auto;padding:24px;border:1px solid #e8e8e8;border-radius:12px;background:#fff;box-shadow:0 22px 70px rgba(0,0,0,.2)}
 .modal-head,.modal-actions{display:flex;align-items:center;justify-content:space-between;gap:14px}
 .modal-head{margin-bottom:20px}
-.modal-head h2{margin:6px 0;color:#18323d;font-size:23px}
-.eyebrow{margin:0;color:#075a6c;font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
-.icon-close{display:grid;place-items:center;width:36px;height:36px;flex:0 0 auto;border:0;border-radius:8px;background:#e8f2f3;color:#075a6c}
+.modal-head h2{margin:6px 0;color:#171717;font-size:23px}
+.eyebrow{margin:0;color:#c65b19;font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
+.icon-close{display:grid;place-items:center;width:36px;height:36px;flex:0 0 auto;border:0;border-radius:8px;background:#fff6f0;color:#c65b19}
 .fields{display:grid;gap:14px;margin:20px 0}
-.fields label{display:grid;gap:7px;color:#354f5b;font-size:13px;font-weight:700}
-.fields input,.fields select{width:100%;min-width:0;padding:11px;border:1px solid #d1dfe3;border-radius:8px;background:#fff;color:#18323d;font:inherit;font-weight:400}
+.fields label{display:grid;gap:7px;color:#333;font-size:13px;font-weight:700}
+.fields input,.fields select{width:100%;min-width:0;padding:11px;border:1px solid #e8e8e8;border-radius:8px;background:#fff;color:#171717;font:inherit;font-weight:400}
 .primary,.secondary{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:0;border-radius:8px;padding:11px 14px;font-weight:700}
-.primary{background:#075a6c;color:#fff}.secondary{background:#dceff0;color:#064653}
-.error{color:#a3312d}
+.primary{background:#171717;color:#fff}.secondary{background:#fff6f0;color:#c65b19}
+.error{color:#a8584e}
 @media(max-width:560px){.modal{padding:18px}.modal-actions{flex-direction:column-reverse}.modal-actions button{width:100%}}
 </style>

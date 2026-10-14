@@ -1,4 +1,4 @@
-type ImageKind = 'profile' | 'catalog' | 'product'
+type ImageKind = 'profile' | 'catalog' | 'gallery' | 'product'
 
 const env = import.meta.env
 
@@ -8,6 +8,10 @@ const imageConfig: Record<ImageKind, { cloudName?: string; uploadPreset?: string
     uploadPreset: env.VITE_CLOUDINARY_PROFILE_UPLOAD_PRESET,
   },
   catalog: {
+    cloudName: env.VITE_CLOUDINARY_CATALOG_CLOUD_NAME || env.VITE_CLOUDINARY_CLOUD_NAME,
+    uploadPreset: env.VITE_CLOUDINARY_CATALOG_UPLOAD_PRESET || env.VITE_CLOUDINARY_UPLOAD_PRESET,
+  },
+  gallery: {
     cloudName: env.VITE_CLOUDINARY_CATALOG_CLOUD_NAME || env.VITE_CLOUDINARY_CLOUD_NAME,
     uploadPreset: env.VITE_CLOUDINARY_CATALOG_UPLOAD_PRESET || env.VITE_CLOUDINARY_UPLOAD_PRESET,
   },
@@ -29,6 +33,7 @@ export async function uploadCloudinaryImage(file: File, kind: ImageKind): Promis
   const labels: Record<ImageKind, string> = {
     profile: 'fotos de perfil',
     catalog: 'portadas de catálogo',
+    gallery: 'fotos de galerías',
     product: 'fotos de productos',
   }
   if (!cloudName || !uploadPreset) {

@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { X, User, Image, LoaderCircle } from 'lucide-vue-next'
+import { X, User, Image, LoaderCircle, ChevronDown } from 'lucide-vue-next'
 import { ref } from 'vue'
 import { uploadCloudinaryImage } from '../cloudinary.ts'
+import ImageCropModal from './ImageCropModal.vue'
 
 const uploadingPhoto = ref(false)
+const cropVisible = ref(false)
+const pendingImage = ref<File | null>(null)
 const uploadError = ref('')
 const changePassword = ref(false)
 const currentPassword = ref('')
@@ -54,12 +57,18 @@ function saveProfile() {
   })
 }
 
-async function uploadPhoto(event: Event) {
+function selectPhoto(event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
 
   if (!file) return
+  pendingImage.value = file
+  cropVisible.value = true
+  input.value = ''
+}
 
+async function uploadPhoto(file: File) {
+  cropVisible.value = false
   uploadingPhoto.value = true
   uploadError.value = ''
 
@@ -71,22 +80,22 @@ async function uploadPhoto(event: Event) {
       : 'No se pudo subir la imagen.'
   } finally {
     uploadingPhoto.value = false
-    input.value = ''
+    pendingImage.value = null
   }
 }
 </script>
 
 <template>
   <!-- Overlay del modal -->
-  <div
-    v-if="props.visible"
-    class="fixed inset-0 z-[100] grid place-items-center overflow-y-auto bg-black/60 p-4"
-    @click.self="emit('close')"
-  >
+<div
+      v-if="props.visible"
+      class="profile-modal-overlay fixed inset-0 z-[100] grid overflow-y-auto bg-black/60"
+      @click.self="emit('close')"
+    >
 
     <!-- Contenido del modal -->
     <div
-      class="login-card relative max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-xl p-6"
+      class="profile-modal-panel login-card relative w-full max-w-md overflow-y-auto p-6"
     >
 
       <button
@@ -114,27 +123,30 @@ async function uploadPhoto(event: Event) {
           Foto de perfil
         </label>
 
-        <div class="relative flex h-40 w-40 items-center justify-center overflow-hidden rounded-full shadow-lg">
+        <div class="profile-photo-wrap relative flex h-40 w-40 items-center justify-center rounded-full">
 
-          <img
-            v-if="props.form.fotoPerfil"
-            :src="props.form.fotoPerfil"
-            alt="Foto de perfil"
-            class="h-full w-full object-cover"
-          />
+          <div class="absolute inset-0 flex items-center justify-center overflow-hidden rounded-full shadow-lg">
+            <img
+              v-if="props.form.fotoPerfil"
+              :src="props.form.fotoPerfil"
+              alt="Foto de perfil"
+              class="h-full w-full object-cover"
+            />
 
-          <User
-            v-if="!props.form.fotoPerfil"
-            class="h-24 w-24"
-          />
+            <User
+              v-if="!props.form.fotoPerfil"
+              class="h-24 w-24"
+            />
+          </div>
           <label
             class="photo-upload-button"
             :class="{ disabled: uploadingPhoto }"
-            title="Subir foto de perfil"
+            title="Subir y ajustar foto de perfil"
+            aria-label="Subir y ajustar foto de perfil"
           >
             <LoaderCircle v-if="uploadingPhoto" :size="20" class="spin" />
             <Image v-else :size="20" />
-            <input type="file" accept="image/*" :disabled="uploadingPhoto" @change="uploadPhoto" />
+            <input type="file" accept="image/*" :disabled="uploadingPhoto" @change="selectPhoto" />
           </label>
         </div>
         <!---
@@ -196,12 +208,18 @@ async function uploadPhoto(event: Event) {
       </div>
 
       <section class="password-section">
-        <label class="password-toggle">
-          <input v-model="changePassword" type="checkbox" />
+        <button
+          class="password-toggle"
+          type="button"
+          :aria-expanded="changePassword"
+          aria-controls="password-fields"
+          @click="changePassword = !changePassword"
+        >
           <span>Cambiar contraseña</span>
-        </label>
+          <ChevronDown :size="18" :class="{ expanded: changePassword }" />
+        </button>
 
-        <div v-if="changePassword" class="password-fields">
+        <div v-if="changePassword" id="password-fields" class="password-fields">
           <div class="field">
             <label for="current-password">Contraseña actual</label>
             <input id="current-password" v-model="currentPassword" type="password" autocomplete="current-password" />
@@ -241,12 +259,26 @@ async function uploadPhoto(event: Event) {
 
     </div>
   </div>
+  <ImageCropModal :visible="cropVisible" :file="pendingImage" :aspect-ratio="1" title="Ajustar foto de perfil" @cancel="cropVisible = false; pendingImage = null" @crop="uploadPhoto" />
 </template>
 
 <style scoped>
+.profile-modal-overlay {
+  align-items: stretch;
+  justify-items: end;
+}
+
+.profile-modal-panel {
+  height: 100vh;
+  height: 100dvh;
+  max-height: none;
+  border-radius: 16px 0 0 16px;
+}
+
 .login-card {
-  background: #fffefa;
-  border: 1px solid #e5ebe3;
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-right: none;
 }
 
 .close-modal {
@@ -255,7 +287,7 @@ async function uploadPhoto(event: Event) {
   right: 16px;
   border: 0;
   background: transparent;
-  color: #4a574f;
+  color: #777;
   cursor: pointer;
 }
 
@@ -264,35 +296,44 @@ async function uploadPhoto(event: Event) {
   letter-spacing: 1.2px;
   font-size: 11px;
   font-weight: 700;
-  color: #1c7655;
+  color: #c65b19;
 }
 
 .login-card h2 {
   font: 700 32px 'Space Grotesk';
   margin: 12px 0 8px;
   letter-spacing: -1px;
+  color: #171717;
 }
 
 .field {
   display: grid;
   gap: 7px;
-  margin-bottom: 17px;
+  margin-bottom: 20px;
 }
 
 .field label {
-  color: #525c55;
+  color: #333;
   font-size: 13px;
   font-weight: 600;
 }
 
 .field input {
   width: 100%;
-  border: 1px solid #dfe5df;
-  background: #fff;
-  padding: 12px 13px;
-  color: #20262d;
-  border-radius: 8px;
+  border: 0;
+  border-bottom: 1px solid #e8e8e8;
+  background: transparent;
+  padding: 12px 0;
+  color: #171717;
+  border-radius: 0;
+  transition: border-color 0.2s;
 }
+.field input:focus {
+  outline: none;
+  border-bottom-color: #c65b19;
+  box-shadow: none;
+}
+
 .photo-upload-button {
   display: grid;
   place-items: center;
@@ -301,10 +342,11 @@ async function uploadPhoto(event: Event) {
   bottom: 0;
   width: 42px;
   height: 42px;
+  z-index: 1;
   border-radius: 50%;
   background: white;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(17, 39, 31, 0.2);
+  box-shadow: 0 4px 12px rgba(0,0,0,.2);
 }
 .photo-upload-button.disabled {
   opacity: 0.65;
@@ -322,27 +364,40 @@ async function uploadPhoto(event: Event) {
 }
 .error {
   margin: 0;
-  color: #a23b36;
+  color: #a8584e;
   font-size: 0.9rem;
 }
 .password-section {
   margin: 24px 0;
   padding-top: 20px;
-  border-top: 1px solid #e5ebe3;
+  border-top: 1px solid #e8e8e8;
 }
 .password-toggle {
   display: flex;
+  width: 100%;
   align-items: center;
-  gap: 8px;
-  color: #25332c;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid #e8e8e8;
+  border-radius: 9px;
+  background: #fff;
+  color: #171717;
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
+  text-align: left;
 }
-.password-toggle input {
-  width: 16px;
-  height: 16px;
-  accent-color: #1c7655;
+.password-toggle:hover {
+  border-color: #c65b19;
+  background: #fff6f0;
+}
+.password-toggle svg {
+  flex: 0 0 auto;
+  transition: transform .18s ease;
+}
+.password-toggle svg.expanded {
+  transform: rotate(180deg);
 }
 .password-fields {
   margin-top: 18px;
@@ -376,12 +431,12 @@ async function uploadPhoto(event: Event) {
 }
 
 .btn-primary {
-  background: #1c7655;
+  background: #171717;
   color: #fff;
 }
 
 .btn-ghost {
-  background: #eef2ee;
-  color: #25332c;
+  background: #f0f0f0;
+  color: #333;
 }
 </style>
