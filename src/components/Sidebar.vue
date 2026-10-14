@@ -2,7 +2,7 @@
 import { LogOut, Package } from 'lucide-vue-next'
 import type { Component } from 'vue'
 
-type View = 'dashboard' | 'catalogo' | 'nuevo-catalogo' | 'inventario' | 'pedidos' | 'clientes' | 'proveedores' | 'usuarios'
+type View = 'dashboard' | 'catalogo' | 'nuevo-catalogo' | 'inventario' | 'combos' | 'pedidos' | 'clientes' | 'proveedores' | 'usuarios' | 'etiquetas'
 
 const props = defineProps<{
   items: Array<{ id: View; label: string; icon: Component }>
@@ -21,10 +21,10 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <aside class="sidebar" :class="{ 'is-open': props.mobileOpen }">
-    <div class="brand">
+  <aside class="sidebar" :class="{ 'is-open': props.mobileOpen, 'is-admin': props.isSuperadmin }">
+    <div class="brand space-x-3">
       <span class="brand-mark"><Package :size="20" /></span>
-      <span>MI NEGOCIO</span>
+      <span>CatalogoZone</span>
     </div>
 
     <nav>
@@ -35,7 +35,6 @@ const emit = defineEmits<{
         :class="{ active: props.activeView === item.id }"
         @click="emit('select', item.id)"
       >
-        <component :is="item.icon" :size="18" />
         <span>{{ item.label }}</span>
       </button>
     </nav>
@@ -51,11 +50,11 @@ const emit = defineEmits<{
 
 <style scoped>
 .sidebar {
-  width: 260px;
-  flex: 0 0 260px;
+  width: 224px;
+  flex: 0 0 224px;
   height: 100vh;
-  background: #1a5f47;
-  border-right: 1px solid #124937;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--sidebar-border);
   padding: 20px 16px;
   display: flex;
   flex-direction: column;
@@ -72,12 +71,12 @@ const emit = defineEmits<{
 .brand {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 0;
   font-family: 'Space Grotesk', sans-serif;
   font-weight: 700;
   letter-spacing: -0.5px;
   font-size: 19px;
-  color: #ffffff;
+  color: var(--sidebar-text);
 }
 .brand-mark {
   width: 36px;
@@ -85,15 +84,15 @@ const emit = defineEmits<{
   border-radius: 11px;
   display: grid;
   place-items: center;
-  background: #f2c96b;
-  color: #173d32;
+  background: var(--accent);
+  color: var(--sidebar-active-text);
 }
 .nav-item {
   width: 100%;
   min-height: 48px;
   border: 0;
   background: transparent;
-  color: #f5fbf7;
+  color: var(--sidebar-text);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -101,16 +100,21 @@ const emit = defineEmits<{
   border-radius: 12px;
   font-weight: 600;
   text-align: left;
+  white-space: nowrap;
   cursor: pointer;
   transition: background .18s ease, color .18s ease;
 }
+.nav-item > span {
+  display: block;
+  min-width: 0;
+}
 .nav-item:hover {
-  background: rgba(255, 255, 255, .14);
-  color: #ffffff;
+  background: var(--sidebar-hover);
+  color: var(--sidebar-text);
 }
 .nav-item.active {
-  background: #d9f0df;
-  color: #124937;
+  background: var(--sidebar-active-bg);
+  color: var(--sidebar-active-text);
 }
 .sidebar-bottom {
   margin-top: auto;
@@ -131,7 +135,7 @@ const emit = defineEmits<{
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: #d9f0df;
+  background: var(--accent-soft);
   display: grid;
   place-items: center;
   font-weight: 700;
@@ -145,13 +149,13 @@ const emit = defineEmits<{
   justify-content: center;
   border: 0;
   background: #ffffff;
-  color: #124937;
+  color: var(--ink);
   cursor: pointer;
   transition: background .18s ease, color .18s ease;
 }
 .btn.logout:hover {
-  background: #f2c96b;
-  color: #173d32;
+  background: var(--accent);
+  color: #fff;
 }
 .icon-btn {
   border: 1px solid rgba(255, 255, 255, .45);
@@ -164,6 +168,36 @@ const emit = defineEmits<{
   place-items: center;
   cursor: pointer;
 }
+.sidebar.is-admin {
+  gap: 12px;
+  padding: 14px 14px;
+}
+.sidebar.is-admin .brand {
+  gap: 10px;
+  font-size: 17px;
+}
+.sidebar.is-admin .brand-mark {
+  width: 32px;
+  height: 32px;
+}
+.sidebar.is-admin nav {
+  gap: 2px;
+}
+.sidebar.is-admin .nav-item {
+  min-height: 40px;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+.sidebar.is-admin .sidebar-bottom {
+  gap: 8px;
+}
+.sidebar.is-admin .btn.logout {
+  min-height: 40px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
 @media (max-width: 920px) {
   .sidebar {
     position: fixed;
@@ -171,13 +205,13 @@ const emit = defineEmits<{
     transform: translateX(-105%);
     z-index: 30;
     transition: transform 0.2s ease;
-    width: min(calc(100vw - 56px), 320px);
+    width: min(calc(100vw - 40px), 264px);
     flex-basis: auto;
     height: 100dvh;
     min-height: 100dvh;
     max-height: 100dvh;
     padding: max(20px, env(safe-area-inset-top)) 16px max(20px, env(safe-area-inset-bottom));
-    box-shadow: 14px 0 32px rgba(8, 42, 29, .2);
+    box-shadow: 14px 0 32px rgba(0, 0, 0, .2);
   }
   .sidebar.is-open {
     transform: translateX(0);
@@ -195,6 +229,15 @@ const emit = defineEmits<{
   }
   .nav-item {
     padding: 12px 11px;
+  }
+  .sidebar.is-admin {
+    gap: 12px;
+    padding-top: max(14px, env(safe-area-inset-top));
+    padding-bottom: max(14px, env(safe-area-inset-bottom));
+  }
+  .sidebar.is-admin .nav-item {
+    min-height: 40px;
+    padding: 8px 10px;
   }
 }
 </style>
