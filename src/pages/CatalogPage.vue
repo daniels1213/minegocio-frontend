@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Search, Package, Store, Shield, Tag, ChevronLeft, ChevronRight, Sparkles, ArrowRight, X, Mail, MessageCircle } from 'lucide-vue-next'
 import LoginModal from '../components/LoginModal.vue'
 import FormAddUser from '../components/FormAddUser.vue'
-import { api, setCredentials, type Catalogo, type Etiqueta, type Usuario } from '../api.ts'
+import { api, hasCredentials, setCredentials, type Catalogo, type Etiqueta, type Usuario } from '../api.ts'
 import CatalogoContPage from './CatalogoContPage.vue'
 import brandLogoUrl from '../assets/Logo.png?url'
 import slideOne from '../assets/img1.png'
@@ -24,7 +24,7 @@ const loading = ref(false)
 const error = ref('')
 
 const showLoginModal = ref(false)
-const username = ref('')
+const gmail = ref('')
 const password = ref('')
 const loginError = ref('')
 const loginLoading = ref(false)
@@ -152,18 +152,22 @@ async function loadLabels() {
 function openLogin() {
   loginError.value = ''
   showLoginModal.value = true
+  password.value = ''
+  gmail.value = ''
 }
 
 function closeLogin() {
   showLoginModal.value = false
   loginError.value = ''
+  password.value = ''
+  gmail.value = ''
 }
 
 async function submitLogin() {
-  const trimmedUsername = username.value.trim()
+  const trimmedGmail = gmail.value.trim()
 
-  if (!trimmedUsername || !password.value.trim()) {
-    loginError.value = 'Debes ingresar usuario y contraseña.'
+  if (!trimmedGmail || !password.value.trim()) {
+    loginError.value = 'Debes ingresar gmail y contraseña.'
     return
   }
 
@@ -171,7 +175,7 @@ async function submitLogin() {
   loginError.value = ''
 
   try {
-    setCredentials(trimmedUsername, password.value)
+    setCredentials(trimmedGmail, password.value)
     await api.me<Usuario>()
     showLoginModal.value = false
     emit('authenticated')
@@ -243,8 +247,9 @@ function openCatalog(catalog: Catalogo) {
 }
 
 function closeCatalog() {
-  window.history.pushState({}, '', '/')
+  window.history.pushState({}, '', hasCredentials() ? '/dashboard' : '/')
   catalogRouteId.value = null
+  window.dispatchEvent(new PopStateEvent('popstate'))
   window.scrollTo({ top: 0 })
 }
 
@@ -302,7 +307,7 @@ onUnmounted(() => {
             class="flex explore-button items-center gap-2 px-4 py-2.5 rounded-10px bg-[#c65b19] hover:bg-[#e07836] text-white font-700 text-sm transition-all duration-200 hover:-translate-y-0.5"
             @click="openLogin">
             <Shield :size="17" />
-            <span>Administración</span>
+            <span>Mi Negocio</span>
           </button>
         </div>
 
@@ -578,8 +583,8 @@ onUnmounted(() => {
     </footer>
 
     <!-- LOGIN -->
-    <LoginModal :visible="showLoginModal" :loading="loginLoading" :error="loginError" :username="username"
-      :password="password" @close="closeLogin" @submit="submitLogin" @update:username="username = $event"
+    <LoginModal :visible="showLoginModal" :loading="loginLoading" :error="loginError" :gmail="gmail"
+      :password="password" @close="closeLogin" @submit="submitLogin" @update:gmail="gmail = $event"
       @update:password="password = $event" />
 
     <!-- REGISTRO -->

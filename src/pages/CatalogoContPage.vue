@@ -17,6 +17,7 @@ interface CatalogChild {
   descripcion?: string
 
   precio?: number | string
+  monedaVenta?: string
 
   cantidad?: number
 
@@ -87,6 +88,7 @@ const productGroups = computed(() => {
             urlFoto: variant.urlFoto,
 
             precio: variant.precio,
+            monedaVenta: variant.monedaVenta,
 
           })
 
@@ -107,6 +109,7 @@ const productGroups = computed(() => {
             descripcion: variant.descripcion || '',
 
             precio: variant.precioVenta,
+            monedaVenta: variant.monedaVenta,
 
           })
 
@@ -424,7 +427,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape))
 
                 'Combo preparado con productos de nuestro inventario.' : 'Sin descripción disponible.') }}</p>
 
-                <strong v-if="group.product.precioVenta !== undefined">{{ group.product.precioVenta }}</strong>
+                <strong v-if="group.product.precioVenta !== undefined">{{ group.product.precioVenta }} {{ group.product.monedaVenta || 'CUP' }}</strong>
 
                 <button v-if="group.children.length" class="children-toggle" type="button" :aria-haspopup="true"
 
@@ -494,7 +497,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape))
 
                 <p v-else-if="child.descripcion">{{ child.descripcion }}</p>
 
-                <strong v-if="child.precio !== undefined">{{ child.precio }}</strong>
+                <strong v-if="child.precio !== undefined">{{ child.precio }} {{ child.monedaVenta || 'CUP' }}</strong>
 
               </div>
 

@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { ImagePlus, LoaderCircle, PackagePlus, Pencil, Plus, Trash2, X } from 'lucide-vue-next'
-import { api, type Producto, type Variante } from '../api.ts'
+import { Eye, ImagePlus, LoaderCircle, PackagePlus, Pencil, Plus, Trash2, X } from 'lucide-vue-next'
+import { api, type Moneda, type Producto, type Variante } from '../api.ts'
 import { uploadCloudinaryImage } from '../cloudinary.ts'
 import ImageCropModal from './ImageCropModal.vue'
 import DeleteConfirmModal from './DeleteConfirmModal.vue'
+import ResponsiveRowInfoModal from './ResponsiveRowInfoModal.vue'
 
 const props = defineProps<{ product: Producto | null }>()
 const emit = defineEmits<{ (e: 'close'): void; (e: 'updated'): void }>()
@@ -22,10 +23,17 @@ const pendingImage = ref<File | null>(null)
 const deletingVariantId = ref<number | null>(null)
 const deleteTargetVariant = ref<Variante | null>(null)
 const showDeleteVariantModal = ref(false)
+const detailVariant = ref<Variante | null>(null)
 
 const deleteVariantMessage = computed(() => deleteTargetVariant.value ? '¿Eliminar la variante "' + deleteTargetVariant.value.nombre + '"? Se quitará de los catálogos y su stock dejará de formar parte del total.' : '¿Eliminar la variante seleccionada?')
 
-const form = reactive({ nombre: '', existencia: 0, urlFoto: '' })
+const form = reactive({
+  nombre: '',
+  existencia: 0,
+  urlFoto: '',
+  precioVenta: 0,
+  monedaVenta: 'CUP' as Moneda,
+})
 
 async function loadVariants(productId: number) {
   loading.value = true
@@ -45,6 +53,8 @@ watch(() => props.product, (product) => {
   form.nombre = ''
   form.existencia = 0
   form.urlFoto = ''
+  form.precioVenta = props.product?.precioVenta || 0
+  form.monedaVenta = props.product?.monedaVenta || 'CUP'
   editingVariant.value = null
   showAddModal.value = false
   if (product?.id) void loadVariants(product.id)
@@ -64,6 +74,8 @@ function openEditModal(variant: Variante) {
   form.nombre = variant.nombre
   form.existencia = variant.existencia
   form.urlFoto = variant.urlFoto || ''
+  form.precioVenta = variant.precio
+  form.monedaVenta = variant.monedaVenta || 'CUP'
   error.value = ''
   showAddModal.value = true
 }
@@ -93,26 +105,38 @@ async function uploadImage(file: File) {
 
 async function saveVariant() {
   if (!props.product?.id) return
+  if (form.precioVenta < 0) {
+    error.value = 'El precio de venta no puede ser negativo.'
+    return
+  }
   saving.value = true
   error.value = ''
   try {
+    let savedVariant: Variante
     if (editingVariant.value?.id) {
-      await api.actualizarVariante<Variante>(props.product.id, editingVariant.value.id, {
+      savedVariant = await api.actualizarVariante<Variante>(props.product.id, editingVariant.value.id, {
         nombre: form.nombre.trim(),
         urlFoto: form.urlFoto || undefined,
+        precio: form.precioVenta,
+        monedaVenta: form.monedaVenta,
       })
     } else {
-      await api.crearVariante<Variante>(props.product.id, {
+      savedVariant = await api.crearVariante<Variante>(props.product.id, {
         nombre: form.nombre.trim(),
         existencia: form.existencia,
         urlFoto: form.urlFoto || undefined,
+        precio: form.precioVenta,
+        monedaVenta: form.monedaVenta,
       })
+      editingVariant.value = savedVariant
     }
 
     showAddModal.value = false
     form.nombre = ''
     form.existencia = 0
     form.urlFoto = ''
+    form.precioVenta = props.product.precioVenta
+    form.monedaVenta = props.product.monedaVenta || 'CUP'
     editingVariant.value = null
     await loadVariants(props.product.id)
     emit('updated')
@@ -161,12 +185,13 @@ async function confirmDeleteVariant() {
         <p v-else-if="!variants.length" class="empty">Este producto todavía no tiene variantes.</p>
         <div v-else class="table-wrap">
           <table>
-            <thead><tr><th>Variante</th><th>Stock</th><th>Acciones</th></tr></thead>
+            <thead><tr><th>Variante</th><th>Precio de venta</th><th>Stock</th><th>Acciones</th></tr></thead>
             <tbody>
               <tr v-for="variant in variants" :key="variant.id">
                 <td><div class="variant-name"><img v-if="variant.urlFoto" :src="variant.urlFoto" :alt="variant.nombre" /><PackagePlus v-else :size="18" /><strong>{{ variant.nombre }}</strong></div></td>
+                <td>{{ variant.precio }} {{ variant.monedaVenta || 'CUP' }}</td>
                 <td>{{ variant.existencia }}</td>
-                <td><div class="variant-actions"><button class="edit-button" type="button" :aria-label="`Editar ${variant.nombre}`" title="Editar variante" @click="openEditModal(variant)"><Pencil :size="15" /></button><button class="delete-button" type="button" :aria-label="`Eliminar ${variant.nombre}`" title="Eliminar variante" :disabled="deletingVariantId === variant.id" @click="deleteVariant(variant)"><LoaderCircle v-if="deletingVariantId === variant.id" class="spin" :size="15" /><Trash2 v-else :size="15" /></button></div></td>
+                <td><div class="variant-actions"><button class="variant-info-button" type="button" :aria-label="`Ver información de ${variant.nombre}`" title="Ver información" @click="detailVariant = variant"><Eye :size="15" /></button><button class="edit-button" type="button" :aria-label="`Editar ${variant.nombre}`" title="Editar variante" @click="openEditModal(variant)"><Pencil :size="15" /></button><button class="delete-button" type="button" :aria-label="`Eliminar ${variant.nombre}`" title="Eliminar variante" :disabled="deletingVariantId === variant.id" @click="deleteVariant(variant)"><LoaderCircle v-if="deletingVariantId === variant.id" class="spin" :size="15" /><Trash2 v-else :size="15" /></button></div></td>
               </tr>
             </tbody>
           </table>
@@ -176,6 +201,18 @@ async function confirmDeleteVariant() {
       <p v-if="error" class="error">{{ error }}</p>
       <footer class="actions"><button class="secondary" type="button" @click="emit('close')">Cerrar</button></footer>
     </section>
+      <ResponsiveRowInfoModal
+        v-if="detailVariant"
+        :title="detailVariant.nombre"
+        :fields="[
+          { label: 'Variante', value: detailVariant.nombre },
+          { label: 'Precio de venta', value: `${detailVariant.precio} ${detailVariant.monedaVenta || 'CUP'}` },
+          { label: 'Stock', value: detailVariant.existencia },
+          { label: 'Stock mínimo', value: detailVariant.existenciaMinima },
+          { label: 'Estado', value: detailVariant.activa ? 'Activa' : 'Inactiva' },
+        ]"
+        @close="detailVariant = null"
+      />
 
     <div v-if="showAddModal" class="modal-layer add-layer" @click.self="showAddModal = false">
       <form class="modal add-modal" role="dialog" aria-modal="true" :aria-label="editingVariant ? 'Editar variante' : 'Añadir variante'" @submit.prevent="saveVariant">
@@ -187,11 +224,18 @@ async function confirmDeleteVariant() {
           <label>Nombre de la variante<input v-model="form.nombre" required maxlength="150" placeholder="Ej. Gallina ponedora" /></label>
           <label v-if="!editingVariant">Stock inicial<input v-model.number="form.existencia" required type="number" min="0" step="1" /></label>
           <p v-if="!editingVariant && !variants.length && props.product.stockActual > 0" class="info">El stock general actual se incluirá en esta primera variante.</p>
+          <label>Precio de venta<input v-model.number="form.precioVenta" required type="number" min="0" step="0.01" /></label>
+          <label>Moneda del precio de venta
+            <select v-model="form.monedaVenta">
+              <option value="CUP">CUP</option>
+              <option value="USD">USD</option>
+            </select>
+          </label>
           <input ref="imageInput" class="file-input" type="file" accept="image/*" :disabled="uploadingImage" @change="selectImage" />
           <button class="image-button" type="button" :disabled="uploadingImage" @click="imageInput?.click()">
             <LoaderCircle v-if="uploadingImage" class="spin" :size="16" />
             <ImagePlus v-else :size="16" />
-            {{ uploadingImage ? 'Subiendo foto...' : 'Subir foto y ajustar encuadre' }}
+            {{ uploadingImage ? 'Subiendo foto...' : 'Subir foto' }}
           </button>
           <img v-if="form.urlFoto" class="image-preview" :src="form.urlFoto" :alt="`Vista previa de ${form.nombre || 'variante'}`" />
         </div>
@@ -236,15 +280,16 @@ async function confirmDeleteVariant() {
 .variant-name img{width:42px;height:42px;border-radius:6px;object-fit:cover;background:#f0f0f0}
 .edit-button{display:grid;place-items:center;width:32px;height:32px;border:0;border-radius:7px;background:#fff6f0;color:#c65b19;cursor:pointer}
 .variant-actions{display:flex;gap:7px}
+.variant-info-button{display:none;place-items:center;width:32px;height:32px;border:0;border-radius:7px;background:#fff6f0;color:#c65b19;cursor:pointer}
 .delete-button{display:grid;place-items:center;width:32px;height:32px;border:0;border-radius:7px;background:#fff2ef;color:#a23d31;cursor:pointer}
 .delete-button:disabled{opacity:.55;cursor:wait}
 .fields{display:grid;gap:12px}
 .fields label{display:grid;gap:7px;color:#333;font-size:13px;font-weight:700}
-.fields input{width:100%;min-width:0;padding:10px;border:1px solid #e8e8e8;border-radius:8px;color:#171717;font:inherit;font-weight:400}
+.fields input,.fields select{width:100%;min-width:0;padding:10px;border:1px solid #e8e8e8;border-radius:8px;color:#171717;font:inherit;font-weight:400;background:#fff}
 .fields .file-input{display:none}
 .image-button{display:inline-flex;align-items:center;justify-self:start;gap:7px;padding:9px 12px;border:0;border-radius:8px;background:#fff6f0;color:#c65b19;font:inherit;font-weight:700;cursor:pointer}
 .image-button:disabled{opacity:.6;cursor:wait}
-.image-preview{width:100%;max-height:180px;border-radius:8px;object-fit:contain;background:#f0f0f0}
+.image-preview{width:100%;height:180px;border-radius:8px;object-fit:cover;background:#f0f0f0}
 .table-wrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse;text-align:left}
 th,td{padding:10px;border-bottom:1px solid #edf1ed;white-space:nowrap}
@@ -257,5 +302,5 @@ th{color:#777;font-size:11px;text-transform:uppercase}
 .primary:disabled{opacity:.6;cursor:wait}
 .error{color:#a8584e}.info{margin:0;color:#777;font-size:13px}
 .spin{animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
-@media(max-width:560px){.modal{padding:18px}.list-heading{align-items:flex-start;flex-direction:column}.list-heading .primary{width:100%;justify-content:center}.actions{flex-direction:column-reverse}.actions button{width:100%}}
+@media(max-width:560px){.modal{padding:18px}.list-heading{align-items:flex-start;flex-direction:column}.list-heading .primary{width:100%;justify-content:center}.actions{flex-direction:column-reverse}.actions button{width:100%}.table-wrap{overflow:visible}.table-wrap table,.table-wrap tbody{display:grid;min-width:0;width:100%;gap:8px}.table-wrap thead,.table-wrap tbody td:nth-child(2),.table-wrap tbody td:nth-child(3){display:none}.table-wrap tbody tr{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;padding:8px;border:1px solid #e8e8e8;border-radius:8px}.table-wrap tbody td{padding:0;border:0;white-space:normal}.table-wrap tbody td:first-child{min-width:0;overflow-wrap:anywhere}.variant-info-button{display:grid}}
 </style>

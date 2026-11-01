@@ -3,6 +3,8 @@ import { X, User, Image, LoaderCircle, ChevronDown } from 'lucide-vue-next'
 import { ref } from 'vue'
 import { uploadCloudinaryImage } from '../cloudinary.ts'
 import ImageCropModal from './ImageCropModal.vue'
+import PhoneInput from './PhoneInput.vue'
+import { isValidPhoneNumber } from '../phone.ts'
 
 const uploadingPhoto = ref(false)
 const cropVisible = ref(false)
@@ -13,6 +15,7 @@ const currentPassword = ref('')
 const newPassword = ref('')
 const confirmPassword = ref('')
 const passwordError = ref('')
+const phoneError = ref('')
 
 const props = defineProps<{
   visible: boolean
@@ -21,6 +24,7 @@ const props = defineProps<{
     nombre: string
     telefono: string
     fotoPerfil: string
+    email: string
   }
 }>()
 
@@ -31,10 +35,17 @@ const emit = defineEmits<{
   (e: 'update:nombre', value: string): void
   (e: 'update:telefono', value: string): void
   (e: 'update:fotoPerfil', value: string): void
+  (e: 'update:email', value: string): void
 }>()
 
 function saveProfile() {
   passwordError.value = ''
+  phoneError.value = ''
+
+  if (!isValidPhoneNumber(props.form.telefono)) {
+    phoneError.value = 'Introduce un teléfono válido para el prefijo seleccionado.'
+    return
+  }
 
   if (!changePassword.value) {
     emit('save')
@@ -149,17 +160,6 @@ async function uploadPhoto(file: File) {
             <input type="file" accept="image/*" :disabled="uploadingPhoto" @change="selectPhoto" />
           </label>
         </div>
-        <!---
-        <input
-          :value="props.form.fotoPerfil"
-          placeholder="URL de imagen"
-          @input="
-            emit(
-              'update:fotoPerfil',
-              ($event.target as HTMLInputElement).value
-            )
-          "
-        /> --->
 
           <p v-if="uploadError" class="error">{{ uploadError }}</p>
 
@@ -195,12 +195,20 @@ async function uploadPhoto(file: File) {
 
       <div class="field">
         <label>Teléfono</label>
+        <PhoneInput :model-value="props.form.telefono" label="Teléfono" required @update:model-value="emit('update:telefono', $event)" />
+        <p v-if="phoneError" class="field-error">{{ phoneError }}</p>
+      </div>
+
+      <div class="field">
+        <label>Gmail</label>
 
         <input
-          :value="props.form.telefono"
+          type="email"
+          autocomplete="email"
+          :value="props.form.email"
           @input="
             emit(
-              'update:telefono',
+              'update:email',
               ($event.target as HTMLInputElement).value
             )
           "
@@ -332,6 +340,11 @@ async function uploadPhoto(file: File) {
   outline: none;
   border-bottom-color: #c65b19;
   box-shadow: none;
+}
+.field-error {
+  margin: 0;
+  color: #a8584e;
+  font-size: 12px;
 }
 
 .photo-upload-button {

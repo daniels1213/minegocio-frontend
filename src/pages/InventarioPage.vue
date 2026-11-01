@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { ArrowDownUp, Eye, History, Package, PackagePlus, Pencil, Plus, RefreshCw, Search, Trash2, X } from 'lucide-vue-next'
-import { api, type Catalogo, type Movimiento, type Producto, type TipoMovimiento, type Variante, ApiError } from '../api.ts'
+import { ArrowDownUp, Eye, History, Package, PackagePlus, Plus, RefreshCw, Search, Trash2, X } from 'lucide-vue-next'
+import { api, type Catalogo, type Moneda, type Movimiento, type Producto, type TipoMovimiento, type Variante, ApiError } from '../api.ts'
 import ProductFormModal from '../components/ProductFormModal.vue'
 import ProductDetailModal from '../components/ProductDetailModal.vue'
 import ProductEditModal from '../components/ProductEditModal.vue'
@@ -10,6 +10,7 @@ import StockMovementModal from '../components/StockMovementModal.vue'
 import AddProductToCatalogModal from '../components/AddProductToCatalogModal.vue'
 import ProductVariantsModal from '../components/ProductVariantsModal.vue'
 import DeleteConfirmModal from '../components/DeleteConfirmModal.vue'
+import ResponsiveRowInfoModal from '../components/ResponsiveRowInfoModal.vue'
 import { formatDate } from '../date.ts'
 
 const props = defineProps<{ usuarioId: number }>()
@@ -36,8 +37,14 @@ const catalogsLoading = ref(false)
 const catalogsError = ref('')
 const productToCatalog = ref<Producto | null>(null)
 const movements = ref<Movimiento[]>([])
+const selectedMovement = ref<Movimiento | null>(null)
 const movementsLoading = ref(false)
 const movementsError = ref('')
+const movementDateFrom = ref('')
+const movementDateTo = ref('')
+const appliedMovementDateFrom = ref('')
+const appliedMovementDateTo = ref('')
+const movementDateError = ref('')
 const variantProduct = ref<Producto | null>(null)
 const movementVariants = ref<Variante[]>([])
 const movementVariantsLoading = ref(false)
@@ -78,12 +85,35 @@ async function loadMovements() {
   movementsLoading.value = true
   movementsError.value = ''
   try {
-    movements.value = await api.movimientos<Movimiento>('')
+    const params = new URLSearchParams()
+    if (appliedMovementDateFrom.value) params.set('desde', appliedMovementDateFrom.value)
+    if (appliedMovementDateTo.value) params.set('hasta', appliedMovementDateTo.value)
+    movements.value = await api.movimientos<Movimiento>(params.toString())
   } catch (reason) {
     movementsError.value = reason instanceof Error ? reason.message : 'No se pudo cargar el historial de movimientos.'
   } finally {
     movementsLoading.value = false
   }
+}
+
+function applyMovementDateFilter() {
+  if (movementDateFrom.value && movementDateTo.value && movementDateFrom.value > movementDateTo.value) {
+    movementDateError.value = 'La fecha inicial no puede ser posterior a la fecha final.'
+    return
+  }
+  movementDateError.value = ''
+  appliedMovementDateFrom.value = movementDateFrom.value
+  appliedMovementDateTo.value = movementDateTo.value
+  void loadMovements()
+}
+
+function clearMovementDateFilter() {
+  movementDateFrom.value = ''
+  movementDateTo.value = ''
+  movementDateError.value = ''
+  appliedMovementDateFrom.value = ''
+  appliedMovementDateTo.value = ''
+  void loadMovements()
 }
 
 function openMovementHistory() {
@@ -101,13 +131,14 @@ function productCreated(productId: number, withSupplier: boolean) {
 }
 
 function openEdit(product: Producto) {
+  detailProduct.value = null
   editingProduct.value = product
   modalError.value = ''
 }
 
-async function saveInfo(form: { nombre: string; descripcion: string; precioVenta: number; urlFoto: string }) {
-  if (!editingProduct.value?.id || !form.nombre.trim() || form.precioVenta < 0) {
-    modalError.value = 'Nombre y precio válido son obligatorios.'
+async function saveInfo(form: { nombre: string; descripcion: string; urlFoto: string }) {
+  if (!editingProduct.value?.id || !form.nombre.trim()) {
+    modalError.value = 'El nombre es obligatorio.'
     return
   }
   savingInfo.value = true
@@ -116,7 +147,6 @@ async function saveInfo(form: { nombre: string; descripcion: string; precioVenta
     await api.update('productos', editingProduct.value.id, {
       nombre: form.nombre.trim(),
       descripcion: form.descripcion.trim(),
-      precioVenta: form.precioVenta,
       urlFoto: form.urlFoto.trim() || null,
     })
     editingProduct.value = null
@@ -171,25 +201,20 @@ async function openMovement(product: Producto) {
   }
 }
 
-async function saveMovement(form: { tipo: TipoMovimiento; cantidad: number; nuevoStock: number; entrada: boolean; varianteId?: number | null }) {
+async function saveMovement(form: { tipo: TipoMovimiento; cantidad: number; nuevoStock: number; entrada: boolean; varianteId?: number | null; precioVenta?: number; monedaVenta?: Moneda }) {
   if (!movementProduct.value?.id) return
 
   // Validar stock del lado del cliente antes de enviar
   if (form.tipo !== 'AJUSTE_INVENTARIO' && form.tipo !== 'COMPRA' && form.tipo !== 'DEVOLUCION') {
-    if (form.tipo === 'OTRO' && form.entrada) {
-      // OTRO con entrada=true es aumento de stock, no validar
-    } else {
-      // VENTA, MERMA, REGALO, OTRO (entrada=false) - son salidas de stock
-      const product = movementProduct.value
-      let availableStock = product.stockActual
-      if (form.varianteId) {
-        const variant = movementVariants.value.find(v => v.id === form.varianteId)
-        availableStock = variant?.existencia ?? 0
-      }
-      if (form.cantidad > availableStock) {
-        modalError.value = `Stock insuficiente. Disponible: ${availableStock}, solicitado: ${form.cantidad}.`
-        return
-      }
+    const product = movementProduct.value
+    let availableStock = product.stockActual
+    if (form.varianteId) {
+      const variant = movementVariants.value.find(v => v.id === form.varianteId)
+      availableStock = variant?.existencia ?? 0
+    }
+    if (form.cantidad > availableStock) {
+      modalError.value = `Stock insuficiente. Disponible: ${availableStock}, solicitado: ${form.cantidad}.`
+      return
     }
   }
 
@@ -203,6 +228,8 @@ async function saveMovement(form: { tipo: TipoMovimiento; cantidad: number; nuev
       nuevoStock: form.nuevoStock,
       entrada: form.entrada,
       varianteId: form.varianteId ?? undefined,
+      precioVenta: form.precioVenta,
+      monedaVenta: form.monedaVenta,
     })
     movementProduct.value = null
     await load()
@@ -250,7 +277,7 @@ watch(() => props.usuarioId, (usuarioId) => {
     <div v-if="loading" class="state"><RefreshCw :size="24" class="spin" /> Cargando productos...</div>
     <div v-else-if="!products.length" class="state"><Package :size="30" /><p>Aún no hay productos.</p><button class="primary" type="button" @click="showProductModal = true"><Plus :size="16" /> Crear producto</button></div>
     <div v-else-if="!filteredProducts.length" class="state"><Search :size="26" /><p>No hay productos que coincidan con “{{ search }}”.</p></div>
-    <div v-else class="table-wrap"><table><thead><tr><th>Nombre</th><th>Stock</th><th>Estado</th><th>Acciones</th></tr></thead><tbody><tr v-for="product in filteredProducts" :key="product.id"><td><div class="product-cell"><img v-if="product.urlFoto" :src="product.urlFoto" :alt="`Foto de ${product.nombre}`" loading="lazy" /><Package v-else :size="20" /><strong>{{ product.nombre }}</strong></div></td><td>{{ product.stockActual }}</td><td><span :class="product.stockActual <= 0 ? 'low' : 'ok'">{{ product.stockActual <= 0 ? 'Agotado' : 'Disponible' }}</span></td><td><div class="row-actions"><button class="add-product-action" type="button" title="Agregar a catálogo" aria-label="Agregar a catálogo" :disabled="!usuarioId || catalogsLoading || Boolean(catalogsError)" @click="productToCatalog = product"><Plus :size="16" /></button><button type="button" title="Variantes" :aria-label="`Variantes: ${product.nombre}`" @click="variantProduct = product"><PackagePlus :size="16" /></button><button type="button" title="Registrar movimiento de inventario" :aria-label="`Movimiento de inventario: ${product.nombre}`" @click="openMovement(product)"><ArrowDownUp :size="16" /></button><button type="button" title="Ver información" :aria-label="`Ver información de ${product.nombre}`" @click="detailProduct = product"><Eye :size="16" /></button><button type="button" title="Editar información" :aria-label="`Editar información de ${product.nombre}`" @click="openEdit(product)"><Pencil :size="16" /></button><button class="delete-product-action" type="button" :title="`Eliminar ${product.nombre}`" :aria-label="`Eliminar permanentemente ${product.nombre}`" :disabled="deletingProductId === product.id" @click="deleteProduct(product)"><RefreshCw v-if="deletingProductId === product.id" class="spin" :size="16" /><Trash2 v-else :size="16" /></button></div></td></tr></tbody></table></div>
+    <div v-else class="table-wrap"><table><thead><tr><th>Nombre</th><th>Stock</th><th>Estado</th><th>Acciones</th></tr></thead><tbody><tr v-for="product in filteredProducts" :key="product.id"><td><div class="product-cell"><img v-if="product.urlFoto" :src="product.urlFoto" :alt="`Foto de ${product.nombre}`" loading="lazy" /><Package v-else :size="20" /><strong>{{ product.nombre }}</strong></div></td><td>{{ product.stockActual }}</td><td><span :class="product.stockActual <= 0 ? 'low' : 'ok'">{{ product.stockActual <= 0 ? 'Agotado' : 'Disponible' }}</span></td><td><div class="row-actions"><button class="add-product-action" type="button" title="Agregar a catálogo" aria-label="Agregar a catálogo" :disabled="!usuarioId || catalogsLoading || Boolean(catalogsError)" @click="productToCatalog = product"><Plus :size="16" /></button><button type="button" title="Variantes" :aria-label="`Variantes: ${product.nombre}`" @click="variantProduct = product"><PackagePlus :size="16" /></button><button type="button" title="Registrar movimiento de inventario" :aria-label="`Movimiento de inventario: ${product.nombre}`" @click="openMovement(product)"><ArrowDownUp :size="16" /></button><button type="button" title="Ver o editar información" :aria-label="`Ver o editar información de ${product.nombre}`" @click="detailProduct = product"><Eye :size="16" /></button><button class="delete-product-action" type="button" :title="`Eliminar ${product.nombre}`" :aria-label="`Eliminar permanentemente ${product.nombre}`" :disabled="deletingProductId === product.id" @click="deleteProduct(product)"><RefreshCw v-if="deletingProductId === product.id" class="spin" :size="16" /><Trash2 v-else :size="16" /></button></div></td></tr></tbody></table></div>
     <div v-if="showMovementHistory" class="history-modal-layer" @click.self="showMovementHistory = false">
       <section class="history-modal" role="dialog" aria-modal="true" aria-labelledby="movement-history-title">
         <header class="history-heading">
@@ -260,12 +287,23 @@ watch(() => props.usuarioId, (usuarioId) => {
             <button class="history-close" type="button" aria-label="Cerrar historial" @click="showMovementHistory = false"><X :size="19" /></button>
           </div>
         </header>
+        <form class="history-filter" @submit.prevent="applyMovementDateFilter">
+          <div class="history-filter-fields">
+            <label>Desde<input v-model="movementDateFrom" type="date" :max="movementDateTo || undefined" /></label>
+            <label>Hasta<input v-model="movementDateTo" type="date" :min="movementDateFrom || undefined" /></label>
+          </div>
+          <div class="history-filter-actions">
+            <button class="secondary" type="button" :disabled="movementsLoading || (!movementDateFrom && !movementDateTo)" @click="clearMovementDateFilter">Limpiar</button>
+            <button class="primary" type="submit" :disabled="movementsLoading"><Search :size="15" /> Filtrar</button>
+          </div>
+        </form>
+        <p v-if="movementDateError" class="error">{{ movementDateError }}</p>
         <p v-if="movementsError" class="error">{{ movementsError }}</p>
         <div v-else-if="movementsLoading" class="history-state"><RefreshCw :size="20" class="spin" /> Cargando movimientos...</div>
-        <div v-else-if="!movements.length" class="history-state">Todavía no hay movimientos registrados.</div>
+        <div v-else-if="!movements.length" class="history-state">{{ appliedMovementDateFrom || appliedMovementDateTo ? 'No hay movimientos en el período seleccionado.' : 'Todavía no hay movimientos registrados.' }}</div>
         <div v-else class="table-wrap history-table-wrap">
-          <table>
-            <thead><tr><th>Fecha</th><th>Producto</th><th>Variante</th><th>Tipo</th><th>Cantidad</th><th>Stock anterior</th><th>Stock nuevo</th></tr></thead>
+          <table class="history-data-table">
+            <thead><tr><th>Fecha</th><th>Producto</th><th>Variante</th><th>Tipo</th><th>Cantidad</th><th>Stock anterior</th><th>Stock nuevo</th><th class="movement-info-header" aria-label="Más información"></th></tr></thead>
             <tbody>
               <tr v-for="movement in movements" :key="movement.id">
                 <td>{{ formatDate(movement.fecha) }}</td>
@@ -275,17 +313,32 @@ watch(() => props.usuarioId, (usuarioId) => {
                 <td>{{ movement.cantidad }}</td>
                 <td>{{ movement.stockAnterior }}</td>
                 <td>{{ movement.stockNuevo }}</td>
+                <td class="movement-info-cell"><button class="movement-info-button" type="button" :aria-label="`Ver movimiento del ${formatDate(movement.fecha)}`" @click="selectedMovement = movement"><Eye :size="16" /></button></td>
               </tr>
             </tbody>
           </table>
         </div>
+        <ResponsiveRowInfoModal
+          v-if="selectedMovement"
+          :title="`Movimiento · ${selectedMovement.productoNombre}`"
+          :fields="[
+            { label: 'Fecha', value: formatDate(selectedMovement.fecha) },
+            { label: 'Producto', value: selectedMovement.productoNombre },
+            { label: 'Variante', value: selectedMovement.varianteNombre || '—' },
+            { label: 'Tipo', value: selectedMovement.tipo.replaceAll('_', ' ') },
+            { label: 'Cantidad', value: selectedMovement.cantidad },
+            { label: 'Stock anterior', value: selectedMovement.stockAnterior },
+            { label: 'Stock nuevo', value: selectedMovement.stockNuevo },
+          ]"
+          @close="selectedMovement = null"
+        />
       </section>
     </div>
 
     <ProductFormModal :visible="showProductModal" @close="showProductModal = false" @created="productCreated" />
     <SupplierModal :visible="showSupplierModal" :product-id="supplierProductId" @close="showSupplierModal = false" @saved="load" />
 
-    <ProductDetailModal :product="detailProduct" @close="detailProduct = null" />
+    <ProductDetailModal :product="detailProduct" @close="detailProduct = null" @edit="openEdit" />
 
     <ProductEditModal :product="editingProduct" :saving="savingInfo" :error="modalError" @close="editingProduct = null" @save="saveInfo" />
     <StockMovementModal :product="movementProduct" :variants="movementVariants" :variants-loading="movementVariantsLoading" :variants-error="movementVariantsError" :saving="savingMovement" :error="modalError" @close="movementProduct = null" @save="saveMovement" />
@@ -810,11 +863,11 @@ h2 {
 .detail-photo {
   display: block;
   width: 100%;
-  max-height: 220px;
+  height: 220px;
   margin-bottom: 16px;
   border-radius: 8px;
   background: #f0f0f0;
-  object-fit: contain;
+  object-fit: cover;
 }
 
 .detail-list {
@@ -909,6 +962,54 @@ h2 {
   flex-shrink: 0;
 }
 
+.history-filter {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px;
+  border: 1px solid #eee;
+  border-radius: 10px;
+  background: #fafafa;
+}
+
+.history-filter-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  width: min(460px, 100%);
+}
+
+.history-filter-fields label {
+  display: grid;
+  gap: 6px;
+  color: #333;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.history-filter-fields input {
+  min-width: 0;
+  height: 40px;
+  padding: 8px 10px;
+  border: 1px solid #e3e3e3;
+  border-radius: 7px;
+  background: #fff;
+  color: #171717;
+  font: inherit;
+  font-weight: 400;
+}
+
+.history-filter-fields input:focus {
+  outline: 2px solid rgba(198, 91, 25, 0.18);
+  border-color: #c65b19;
+}
+
+.history-filter-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .history-close {
   display: grid;
   place-items: center;
@@ -939,6 +1040,11 @@ h2 {
 
 .history-table-wrap {
   border: 0;
+}
+
+.movement-info-header,
+.movement-info-cell {
+  display: none;
 }
 
 /* =========================
@@ -1125,17 +1231,43 @@ h2 {
     align-self: flex-end;
   }
 
-  .table-wrap {
+  .table-wrap:not(.history-table-wrap) {
+    overflow: visible;
+    border: 0;
+    background: transparent;
+  }
+
+  .table-wrap:not(.history-table-wrap) table,
+  .table-wrap:not(.history-table-wrap) tbody {
+    display: grid;
+    width: 100%;
+    min-width: 0;
+    gap: 9px;
+  }
+
+  .table-wrap:not(.history-table-wrap) thead,
+  .table-wrap:not(.history-table-wrap) tbody td:nth-child(2),
+  .table-wrap:not(.history-table-wrap) tbody td:nth-child(3) {
+    display: none;
+  }
+
+  .table-wrap:not(.history-table-wrap) tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    padding: 10px 12px;
+    border: 1px solid #e8e8e8;
     border-radius: 10px;
+    background: #fff;
   }
 
-  .table-wrap table {
-    min-width: 650px;
+  .table-wrap:not(.history-table-wrap) tbody td {
+    padding: 0;
+    border: 0;
   }
 
-  .table-wrap th,
-  .table-wrap td {
-    padding: 11px 10px;
+  .table-wrap:not(.history-table-wrap) tbody td:first-child {
+    min-width: 0;
   }
 
   .product-cell {
@@ -1153,7 +1285,9 @@ h2 {
   }
 
   .row-actions {
-    gap: 5px;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 6px;
   }
 
   .row-actions button {
@@ -1204,6 +1338,22 @@ h2 {
     padding: 9px 12px;
   }
 
+  .history-filter {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .history-filter-fields {
+    width: 100%;
+    gap: 8px;
+  }
+
+  .history-filter-actions {
+    justify-content: flex-end;
+  }
+
   .history-close {
     width: 34px;
     height: 34px;
@@ -1211,11 +1361,61 @@ h2 {
 
   .history-table-wrap {
     width: 100%;
-    overflow-x: auto;
+    overflow: visible;
   }
 
-  .history-table-wrap table {
-    min-width: 760px;
+  .history-table-wrap table,
+  .history-table-wrap tbody {
+    display: grid;
+    width: 100%;
+    min-width: 0;
+    gap: 8px;
+  }
+
+  .history-table-wrap thead,
+  .history-data-table tbody td:nth-child(1),
+  .history-data-table tbody td:nth-child(3),
+  .history-data-table tbody td:nth-child(4),
+  .history-data-table tbody td:nth-child(5),
+  .history-data-table tbody td:nth-child(6),
+  .history-data-table tbody td:nth-child(7) {
+    display: none;
+  }
+
+  .history-data-table tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border: 1px solid #e8e8e8;
+    border-radius: 9px;
+    background: #fff;
+  }
+
+  .history-data-table tbody td {
+    padding: 0;
+    border: 0;
+  }
+
+  .history-data-table tbody td:nth-child(2) {
+    font-weight: 700;
+    overflow-wrap: anywhere;
+  }
+
+  .movement-info-button {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border: 0;
+    border-radius: 8px;
+    background: #fff6f0;
+    color: #c65b19;
+  }
+
+  .movement-info-cell {
+    display: grid;
   }
 
   /* Modales auxiliares */

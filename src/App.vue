@@ -7,6 +7,7 @@ import { hasCredentials } from './api'
 
 const isAuthenticated = ref(hasCredentials())
 const currentPath = ref(window.location.pathname)
+const isCatalogRoute = computed(() => /^\/catalogoCont\/\d+\/?$/.test(currentPath.value))
 const legalPage = computed(() => {
   if (currentPath.value === '/terminos-de-uso') return 'terms'
   if (currentPath.value === '/politica-de-privacidad') return 'privacy'
@@ -36,7 +37,7 @@ onUnmounted(() => window.removeEventListener('popstate', syncPath))
   />
 
   <CatalogPage
-    v-else-if="!isAuthenticated"
+    v-else-if="!isAuthenticated || isCatalogRoute"
     @authenticated="showDashboard"
   />
 

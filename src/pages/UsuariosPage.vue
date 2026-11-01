@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { ChevronDown, Pencil, Plus, RefreshCw, Search, Shield, Store, Trash2, UserRound } from 'lucide-vue-next'
+import { Eye, Pencil, Plus, RefreshCw, Search, Trash2, UserRound } from 'lucide-vue-next'
 import { api, type Catalogo, type Usuario } from '../api.ts'
+import UserInfoModal from '../components/UserInfoModal.vue'
 import UserFormModal, { type UserAdminForm } from '../components/UserFormModal.vue'
 import DeleteConfirmModal from '../components/DeleteConfirmModal.vue'
+import { isValidPhoneNumber } from '../phone.ts'
 
 const users = ref<Usuario[]>([])
 const search = ref('')
@@ -12,7 +14,7 @@ const saving = ref(false)
 const error = ref('')
 const showModal = ref(false)
 const editingId = ref<number | null>(null)
-const expandedUserId = ref<number | null>(null)
+const infoUser = ref<Usuario | null>(null)
 const userCatalogs = ref<Record<number, Catalogo[]>>({})
 const catalogLoadingId = ref<number | null>(null)
 const removingCatalogId = ref<number | null>(null)
@@ -56,6 +58,10 @@ async function save(userForm: UserAdminForm) {
     error.value = 'Username, nombre, WhatsApp y contraseña son obligatorios al crear.'
     return
   }
+  if (!isValidPhoneNumber(userForm.wapp)) {
+    error.value = 'Introduce un WhatsApp válido para el prefijo seleccionado.'
+    return
+  }
   saving.value = true
   error.value = ''
   try {
@@ -87,13 +93,8 @@ async function confirmDeleteUser() {
   }
 }
 
-async function toggleUserCatalogs(user: Usuario) {
-  if (expandedUserId.value === user.id) {
-    expandedUserId.value = null
-    return
-  }
-
-  expandedUserId.value = user.id
+async function openInfo(user: Usuario) {
+  infoUser.value = user
   catalogLoadingId.value = user.id
   catalogErrors.value = { ...catalogErrors.value, [user.id]: '' }
   try {
@@ -150,7 +151,33 @@ onMounted(load)
     <p v-if="error && !showModal" class="error">{{ error }}</p>
     <div v-if="loading" class="state"><RefreshCw :size="24" class="spin" /> Cargando usuarios...</div>
     <div v-else-if="!filteredUsers.length" class="state"><UserRound :size="30" /><p>{{ search ? 'No hay usuarios que coincidan con el filtro.' : 'Aún no hay usuarios.' }}</p></div>
-    <div v-else class="table-wrap"><table><thead><tr><th>Usuario</th><th>Nombre</th><th>WhatsApp</th><th>Rol</th><th>Catálogos</th><th>Acciones</th></tr></thead><tbody><template v-for="user in filteredUsers" :key="user.id"><tr><td><strong>{{ user.username }}</strong></td><td>{{ user.nombre }}</td><td>{{ user.wapp }}</td><td><span class="role" :class="user.rol === 'ADMIN' ? 'admin' : ''"><Shield v-if="user.rol === 'ADMIN'" :size="13" />{{ user.rol }}</span></td><td><button class="catalog-toggle" type="button" :aria-expanded="expandedUserId === user.id" :title="expandedUserId === user.id ? 'Ocultar catálogos' : 'Ver catálogos'" @click="toggleUserCatalogs(user)"><Store :size="15" /><span>Ver lista</span><ChevronDown :size="14" :class="{ expanded: expandedUserId === user.id }" /></button></td><td class="actions"><button type="button" title="Editar usuario" @click="openEdit(user)"><Pencil :size="16" /></button><button type="button" title="Eliminar usuario" @click="remove(user)"><Trash2 :size="16" /></button></td></tr><tr v-if="expandedUserId === user.id" class="catalogs-row"><td colspan="6"><div class="catalog-list"><h3>Catálogos de {{ user.username }}</h3><p v-if="catalogLoadingId === user.id" class="catalog-state">Cargando catálogos...</p><p v-else-if="catalogErrors[user.id]" class="error">{{ catalogErrors[user.id] }}</p><p v-else-if="!userCatalogs[user.id]?.length" class="catalog-state">Este usuario aún no tiene catálogos.</p><div v-else class="catalog-items"><div v-for="catalog in userCatalogs[user.id]" :key="catalog.id" class="catalog-item"><img v-if="catalog.urlFotoPortada" :src="catalog.urlFotoPortada" :alt="`Portada de ${catalog.nombre}`" /><Store v-else :size="20" class="catalog-icon" /><div class="catalog-copy"><strong>{{ catalog.nombre }}</strong><small>{{ catalog.descripcion || 'Sin descripción' }}</small></div><button class="catalog-delete" type="button" :disabled="removingCatalogId === catalog.id" :aria-label="`Eliminar catálogo ${catalog.nombre}`" @click="removeCatalog(user, catalog)"><Trash2 :size="15" /> Eliminar</button></div></div></div></td></tr></template></tbody></table></div>
+    <div v-else class="table-wrap">
+      <table>
+        <thead><tr><th>Nombre</th><th>WhatsApp</th><th>Acciones</th></tr></thead>
+        <tbody>
+          <tr v-for="user in filteredUsers" :key="user.id">
+            <td>{{ user.nombre }}</td>
+            <td>{{ user.wapp }}</td>
+            <td class="actions">
+              <button type="button" title="Ver información del usuario" :aria-label="`Ver información de ${user.nombre}`" @click="openInfo(user)"><Eye :size="16" /><span>Ver info</span></button>
+              <button type="button" title="Editar usuario" :aria-label="`Editar usuario ${user.nombre}`" @click="openEdit(user)"><Pencil :size="16" /></button>
+              <button type="button" title="Eliminar usuario" :aria-label="`Eliminar usuario ${user.nombre}`" @click="remove(user)"><Trash2 :size="16" /></button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <UserInfoModal
+      v-if="infoUser"
+      :user="infoUser"
+      :catalogs="userCatalogs[infoUser.id] || []"
+      :catalogs-loading="catalogLoadingId === infoUser.id"
+      :catalog-error="catalogErrors[infoUser.id] || ''"
+      :removing-catalog-id="removingCatalogId"
+      @close="infoUser = null"
+      @refresh-catalogs="openInfo(infoUser)"
+      @delete-catalog="removeCatalog(infoUser, $event)"
+    />
     <UserFormModal :visible="showModal" :editing="editingId !== null" :form="form" :saving="saving" :error="error" @close="showModal = false" @submit="save" />
     <DeleteConfirmModal
       :visible="showDeleteUserModal"
@@ -176,20 +203,6 @@ onMounted(load)
 </style>
 
 <style scoped>
-.catalog-toggle,.catalog-delete{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:0;border-radius:8px;padding:8px 10px;background:#fff6f0;color:#c65b19;font-weight:700;cursor:pointer}
-.catalog-toggle svg:last-child{transition:transform .18s}
-.catalog-toggle svg:last-child.expanded{transform:rotate(180deg)}
-.catalogs-row td{padding:0 15px 15px!important;background:#fafafa}
-.catalog-list{padding:15px 0}
-.catalog-list h3{margin:0 0 12px;color:#171717;font-size:15px}
-.catalog-state{margin:8px 0;color:#777}
-.catalog-items{display:grid;gap:8px}
-.catalog-item{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #e8e8e8}
-.catalog-item img,.catalog-icon{width:38px;height:38px;flex:0 0 38px;object-fit:cover;border-radius:6px;background:#fff6f0;color:#c65b19}
-.catalog-copy{display:grid;gap:3px;min-width:0;flex:1}
-.catalog-copy small{overflow:hidden;color:#777;text-overflow:ellipsis;white-space:nowrap}
-.catalog-delete{background:#fff2ef;color:#a8584e}
-.catalog-delete:disabled{opacity:.6;cursor:wait}
 /* ================================
    RESPONSIVE: PÁGINA DE USUARIOS
    ================================ */
@@ -239,16 +252,16 @@ onMounted(load)
   white-space: nowrap;
 }
 
-/* Tabla: permite desplazarse horizontalmente */
+/* La tabla mantiene su ancho en pantallas grandes. */
 .table-wrap {
   width: 100%;
   max-width: 100%;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
+  overflow-x: hidden;
 }
 
 .table-wrap table {
-  min-width: 760px;
+  width: 100%;
+  border-collapse: collapse;
 }
 
 .table-wrap th,
@@ -260,29 +273,6 @@ onMounted(load)
   white-space: nowrap;
 }
 
-/* Evita que los nombres largos rompan el diseño */
-.catalog-copy {
-  overflow: hidden;
-}
-
-.catalog-copy strong {
-  overflow-wrap: anywhere;
-}
-
-.catalog-copy small {
-  display: block;
-  max-width: 100%;
-}
-
-/* Botones de los catálogos */
-.catalog-toggle,
-.catalog-delete {
-  flex-shrink: 0;
-  white-space: nowrap;
-}
-
-.catalog-delete:focus-visible,
-.catalog-toggle:focus-visible,
 .primary:focus-visible,
 .secondary:focus-visible,
 .actions button:focus-visible {
@@ -351,32 +341,59 @@ onMounted(load)
     padding: 12px;
   }
 
-  /* Detalle de los catálogos */
-  .catalogs-row td {
-    padding-right: 10px !important;
-    padding-left: 10px !important;
+  .table-wrap {
+    overflow: visible;
+    border: 0;
+    background: transparent;
   }
 
-  .catalog-list {
-    padding: 12px 0;
-  }
-
-  .catalog-item {
+  .table-wrap table,
+  .table-wrap tbody {
+    display: grid;
     gap: 9px;
   }
 
-  .catalog-item img,
-  .catalog-icon {
-    width: 34px;
-    height: 34px;
-    flex-basis: 34px;
+  .table-wrap thead,
+  .table-wrap tbody td:nth-child(2) {
+    display: none;
   }
 
-  .catalog-delete {
-    gap: 5px;
-    padding: 8px;
-    font-size: 12px;
+  .table-wrap tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 10px;
+    border: 1px solid #e8e8e8;
+    border-radius: 10px;
+    background: #fff;
   }
+
+  .table-wrap tbody td {
+    padding: 4px 0;
+    border: 0;
+    white-space: normal;
+  }
+
+  .table-wrap tbody td:first-child {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    font-weight: 700;
+  }
+
+  .actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .actions button {
+    padding: 8px;
+  }
+
+  .actions button:first-child span {
+    display: none;
+  }
+
 }
 
 /* ================================
@@ -402,30 +419,12 @@ onMounted(load)
     font-size: 12px;
   }
 
-  .catalog-item {
-    flex-wrap: wrap;
-  }
-
-  .catalog-copy {
-    flex: 1 1 120px;
-  }
-
-  .catalog-delete {
-    margin-left: auto;
-  }
-
-  .catalog-copy small {
-    white-space: normal;
-    overflow-wrap: anywhere;
-  }
 }
 
 /* Respeta la preferencia de movimiento reducido */
 @media (prefers-reduced-motion: reduce) {
-  .spin,
-  .catalog-toggle svg:last-child {
+  .spin {
     animation: none;
-    transition: none;
   }
 }
 

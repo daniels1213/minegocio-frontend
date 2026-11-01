@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { Save, X } from 'lucide-vue-next'
+import PhoneInput from './PhoneInput.vue'
+import { isValidPhoneNumber } from '../phone.ts'
 
 export interface UserAdminForm {
   username: string
@@ -13,21 +15,32 @@ export interface UserAdminForm {
 const props = defineProps<{ visible: boolean; editing: boolean; form: UserAdminForm; saving: boolean; error: string }>()
 const emit = defineEmits<{ (e: 'close'): void; (e: 'submit', form: UserAdminForm): void }>()
 const form = ref<UserAdminForm>({ ...props.form })
+const phoneError = ref('')
 
 watch(() => props.form, (value) => { form.value = { ...value } }, { deep: true })
+
+function submit() {
+  phoneError.value = ''
+  if (!isValidPhoneNumber(form.value.wapp)) {
+    phoneError.value = 'Introduce un WhatsApp válido para el prefijo seleccionado.'
+    return
+  }
+  emit('submit', form.value)
+}
 </script>
 
 <template>
   <div v-if="props.visible" class="modal-layer" @click.self="emit('close')">
-    <form class="modal" role="dialog" aria-modal="true" :aria-label="props.editing ? 'Editar usuario' : 'Crear usuario'" autocomplete="off" @submit.prevent="emit('submit', form)">
+    <form class="modal" role="dialog" aria-modal="true" :aria-label="props.editing ? 'Editar usuario' : 'Crear usuario'" autocomplete="off" @submit.prevent="submit">
       <header class="modal-head"><div><p class="eyebrow">Cuenta</p><h2>{{ props.editing ? 'Editar usuario' : 'Crear usuario' }}</h2></div><button class="icon-close" type="button" aria-label="Cerrar" @click="emit('close')"><X :size="18" /></button></header>
       <div class="fields">
         <label>Username<input v-model="form.username" type="text" autocomplete="off" required /></label>
         <label>Nombre<input v-model="form.nombre" type="text" autocomplete="name" required /></label>
-        <label>WhatsApp<input v-model="form.wapp" type="tel" autocomplete="tel" required /></label>
+        <label>WhatsApp<PhoneInput v-model="form.wapp" required label="WhatsApp" /></label>
         <label>Contraseña<input v-model="form.password" type="password" autocomplete="new-password" :required="!props.editing" :placeholder="props.editing ? 'Dejar vacío para conservarla' : ''" /></label>
         <label>Rol<select v-model="form.rol"><option value="USER">USER</option><option value="ADMIN">ADMIN</option></select></label>
       </div>
+      <p v-if="phoneError" class="error">{{ phoneError }}</p>
       <p v-if="props.error" class="error">{{ props.error }}</p>
       <footer class="modal-actions"><button class="secondary" type="button" @click="emit('close')">Cancelar</button><button class="primary" type="submit" :disabled="props.saving"><Save :size="16" /> {{ props.saving ? 'Guardando...' : 'Guardar usuario' }}</button></footer>
     </form>

@@ -8,9 +8,9 @@ import ImageCropModal from './ImageCropModal.vue'
 const props = defineProps<{ product: Producto | null; saving: boolean; error: string }>()
 const emit = defineEmits<{
   (e: 'close'): void
-  (e: 'save', value: { nombre: string; descripcion: string; precioVenta: number; urlFoto: string }): void
+  (e: 'save', value: { nombre: string; descripcion: string; urlFoto: string }): void
 }>()
-const form = ref({ nombre: '', descripcion: '', precioVenta: 0, urlFoto: '' })
+const form = ref({ nombre: '', descripcion: '', urlFoto: '' })
 const imageInput = ref<HTMLInputElement | null>(null)
 const uploadingImage = ref(false)
 const imageError = ref('')
@@ -44,7 +44,6 @@ watch(() => props.product, (product) => {
   form.value = {
     nombre: product?.nombre || '',
     descripcion: product?.descripcion || '',
-    precioVenta: product?.precioVenta || 0,
     urlFoto: product?.urlFoto || '',
   }
 }, { immediate: true })
@@ -57,7 +56,6 @@ watch(() => props.product, (product) => {
       <div class="fields">
         <label>Nombre<input v-model="form.nombre" required type="text" /></label>
         <label>Descripción<textarea v-model="form.descripcion" rows="3" /></label>
-        <label>Precio de venta<input v-model.number="form.precioVenta" required type="number" min="0" step="0.01" /></label>
         <div class="image-field">
           <input ref="imageInput" class="file-input" type="file" accept="image/*" :disabled="uploadingImage" @change="selectImage" />
           <button class="image-button" type="button" :disabled="uploadingImage" @click="imageInput?.click()">
@@ -86,13 +84,13 @@ watch(() => props.product, (product) => {
 .icon-close{display:grid;place-items:center;width:36px;height:36px;flex:0 0 auto;border:0;border-radius:8px;background:#fff6f0;color:#c65b19}
 .fields{display:grid;gap:14px;margin:20px 0}
 .fields label{display:grid;gap:7px;color:#333;font-size:13px;font-weight:700}
-.fields input,.fields textarea{width:100%;min-width:0;padding:11px;border:1px solid #e8e8e8;border-radius:8px;color:#171717;font:inherit;font-weight:400}
+.fields input,.fields textarea,.fields select{width:100%;min-width:0;padding:11px;border:1px solid #e8e8e8;border-radius:8px;color:#171717;font:inherit;font-weight:400;background:#fff}
 .fields textarea{resize:vertical}
 .image-field{display:grid;gap:8px;color:#333;font-size:13px;font-weight:700}
 .file-input{display:none}
 .image-button{display:inline-flex;align-items:center;justify-content:center;justify-self:start;gap:7px;padding:9px 12px;border:0;border-radius:8px;background:#fff6f0;color:#c65b19;font:inherit;font-weight:700;cursor:pointer}
 .image-button:disabled{opacity:.6;cursor:wait}
-.image-preview{width:100%;max-height:180px;border-radius:8px;object-fit:contain;background:#f0f0f0}
+.image-preview{width:100%;height:180px;border-radius:8px;object-fit:cover;background:#f0f0f0}
 .primary,.secondary{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:0;border-radius:8px;padding:11px 14px;font-weight:700}
 .primary{background:#171717;color:#fff}.secondary{background:#fff6f0;color:#c65b19}
 .error{color:#a8584e}

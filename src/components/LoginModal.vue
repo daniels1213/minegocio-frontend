@@ -1,39 +1,46 @@
 <script setup lang="ts">
-import { X, LockKeyhole } from 'lucide-vue-next'
+import { X, LockKeyhole, Eye, EyeOff} from 'lucide-vue-next'
+import { ref } from 'vue'
 
 const props = defineProps<{
   visible: boolean
   loading: boolean
   error: string
-  username: string
   password: string
+  gmail: string
 }>()
+
+const mostrarpassword = ref(false)
 
 const emit = defineEmits<{
   (e: 'close'): void
   (e: 'submit'): void
-  (e: 'update:username', value: string): void
+  (e: 'update:gmail', value: string): void
   (e: 'update:password', value: string): void
 }>()
 </script>
 
 <template>
-  <div v-if="props.visible" class="admin-overlay" @click.self="emit('close')">
+  <div v-if="props.visible" class="admin-overlay" @click.self="emit('close'), mostrarpassword=false">
     <form class="login-card admin-card" role="dialog" aria-modal="true" aria-labelledby="admin-modal-title" autocomplete="off" @submit.prevent="emit('submit')">
-      <button type="button" class="close-modal" aria-label="Cerrar" @click="emit('close')">
+      <button type="button" class="close-modal" aria-label="Cerrar" @click="emit('close'), mostrarpassword=false">
         <X :size="18" />
       </button>
       <span class="eyebrow">Área privada</span>
-      <h2 id="admin-modal-title">Administración</h2>
+      <h2 id="admin-modal-title">Mi Negocio</h2>
       <p>Verifica tus credenciales para entrar al panel operativo.</p>
 
       <div class="field">
-        <label for="username">Usuario</label>
-        <input id="username" :value="props.username" @input="emit('update:username', ($event.target as HTMLInputElement).value)" required autocomplete="off" placeholder="tu.usuario" />
+        <label for="gmail">Gmail</label>
+        <input id="gmail" type="email" name="email" :value="props.gmail" @input="emit('update:gmail', ($event.target as HTMLInputElement).value)" required autocomplete="email" placeholder="tu@gmail.com"/>
       </div>
       <div class="field">
         <label for="password">Contraseña</label>
-        <input id="password" :value="props.password" @input="emit('update:password', ($event.target as HTMLInputElement).value)" required type="password" autocomplete="new-password" placeholder="••••••••" />
+        <div class="flex justify-end items-center">
+        <input class="relative" :value="props.password" @input="emit('update:password', ($event.target as HTMLInputElement).value)" required :type="mostrarpassword ? 'text' : 'password'" autocomplete="new-password" placeholder="* * * * * * * *" name="password"/>
+        <EyeOff v-if="!mostrarpassword" :size="17" class="absolute mr-2 cursor-pointer hover:text-#c65b19" @click="mostrarpassword=true"/>  
+        <Eye v-else :size="17" class="absolute mr-2 cursor-pointer hover:text-#c65b19" @click="mostrarpassword=false"/>  
+      </div>
       </div>
 
       <p v-if="props.error" class="error">{{ props.error }}</p>

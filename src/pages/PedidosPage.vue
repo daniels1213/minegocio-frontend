@@ -50,7 +50,11 @@ const visibleOrders = computed(() => {
 		: monthOrders.value.filter((order) => order.estado === stateFilter.value)
 	return [...filtered].sort((left, right) => (right.fecha || '').localeCompare(left.fecha || ''))
 })
-const monthRevenue = computed(() => monthOrders.value.reduce((sum, order) => sum + Number(order.ingresoTotal ?? order.total ?? 0), 0))
+const monthRevenue = computed(() => monthOrders.value.reduce((totals, order) => {
+	const currency = order.moneda || 'CUP'
+	totals[currency] += Number(order.ingresoTotal ?? order.total ?? 0)
+	return totals
+}, { CUP: 0, USD: 0 }))
 
 function formatAmount(value: number) {
 	return new Intl.NumberFormat('es', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)
@@ -142,7 +146,7 @@ onMounted(load)
 			</article>
 			<article class="summary-card revenue-card">
 				<div class="summary-icon revenue-icon"><WalletCards :size="19" /></div>
-				<div><span>Venta del mes</span><strong>{{ formatAmount(monthRevenue) }}</strong><small>Total registrado</small></div>
+				<div><span>Venta del mes</span><strong>{{ formatAmount(monthRevenue.CUP) }} CUP</strong><small>{{ formatAmount(monthRevenue.USD) }} USD</small></div>
 			</article>
 		</div>
 
@@ -190,7 +194,7 @@ onMounted(load)
 						</span>
 						<span v-if="(order.listaProductos || order.detalles || []).length > 2" class="more-items">+{{ (order.listaProductos || order.detalles || []).length - 2 }} más</span>
 					</div>
-					<div class="order-total"><small>Total de venta</small><strong>{{ formatAmount(Number(order.ingresoTotal ?? order.total ?? 0)) }}</strong></div>
+					<div class="order-total"><small>Total de venta</small><strong>{{ formatAmount(Number(order.ingresoTotal ?? order.total ?? 0)) }} {{ order.moneda || 'CUP' }}</strong></div>
 					<div class="order-status" :class="`status-${(order.estado || 'PENDIENTE').toLowerCase()}`">
 						<span class="status-dot"></span>
 						<select :value="order.estado" :disabled="order.estado !== 'PENDIENTE'" :aria-label="`Estado del pedido ${order.numeroPedido}`" @change="changeState(order, ($event.target as HTMLSelectElement).value as EstadoPedido)">
