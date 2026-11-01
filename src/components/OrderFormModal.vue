@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { LoaderCircle, Plus, Save, Trash2, X } from 'lucide-vue-next'
+import { ChevronDown, LoaderCircle, Plus, Save, Search, Trash2, X } from 'lucide-vue-next'
 import { ApiError, api, type Cliente, type Combo, type Pedido, type Producto, type Variante } from '../api.ts'
+import PhoneInput from './PhoneInput.vue'
+import { isValidPhoneNumber, normalizePhoneNumber } from '../phone.ts'
 
 const props = defineProps<{ visible: boolean; order?: Pedido }>()
 const emit = defineEmits<{ (e: 'close'): void; (e: 'created'): void }>()
@@ -18,6 +20,10 @@ const combos = ref<Combo[]>([])
 const clients = ref<Cliente[]>([])
 const clientsLoading = ref(false)
 const clientsLoaded = ref(false)
+const clientStep = ref<'choice' | 'existing' | 'new' | 'order'>('choice')
+const clientSearch = ref('')
+const itemSearch = ref('')
+const activePickerIndex = ref<number | null>(null)
 const selectedClientId = ref<number | null>(null)
 const variantOptions = ref<Record<number, Variante[]>>({})
 const loadingVariants = ref<number[]>([])
@@ -29,24 +35,55 @@ const lines = ref<OrderLine[]>([newLine()])
 const loading = ref(false)
 const error = ref('')
 
-const clientsForTelephone = computed(() => {
-  const telephone = normalizeTelephone(clienteTelefono.value)
-  if (!telephone) return []
-  return clients.value.filter((client) => normalizeTelephone(client.telefono) === telephone)
+const filteredClients = computed(() => {
+  const search = clientSearch.value.trim().toLocaleLowerCase()
+  const normalizedSearch = normalizeTelephone(search)
+  if (!search) return clients.value
+  return clients.value.filter((client) =>
+    client.nombre.toLocaleLowerCase().includes(search)
+    || (normalizedSearch && normalizeTelephone(client.telefono).includes(normalizedSearch)),
+  )
 })
-const selectedClient = computed(() =>
-  clientsForTelephone.value.find((client) => client.id === selectedClientId.value),
-)
+const duplicateClient = computed(() => {
+  const telephone = normalizeTelephone(clienteTelefono.value)
+  if (!telephone) return undefined
+  return clients.value.find((client) => normalizePhoneNumber(client.telefono) === normalizePhoneNumber(clienteTelefono.value))
+})
+const duplicateClientMessage = computed(() => duplicateClient.value
+  ? `Ese WhatsApp ya está registrado en el nombre "${duplicateClient.value.nombre}".`
+  : '')
+const filteredOrderItems = computed(() => {
+  const search = itemSearch.value.trim().toLocaleLowerCase()
+  const options = [
+    ...products.value.filter((product) => product.id).map((product) => ({
+      selection: `producto:${product.id}`,
+      name: product.nombre,
+      detail: `${product.precioVenta} ${product.monedaVenta || 'CUP'}`,
+      type: 'Producto',
+    })),
+    ...combos.value.filter((combo) => combo.id).map((combo) => ({
+      selection: `combo:${combo.id}`,
+      name: combo.nombre,
+      detail: `${combo.precio} CUP`,
+      type: 'Combo',
+    })),
+  ]
+  return search ? options.filter((option) => option.name.toLocaleLowerCase().includes(search)) : options
+})
 
 function newLine(): OrderLine {
   return { selection: '', productoId: null, comboId: null, cantidad: 1, variantes: {} }
 }
 
 function resetOrderForm() {
+  clientStep.value = 'choice'
+  clientSearch.value = ''
   selectedClientId.value = null
   clienteNombre.value = ''
   clienteTelefono.value = ''
   clienteDireccion.value = ''
+  activePickerIndex.value = null
+  itemSearch.value = ''
   lines.value = [newLine()]
 }
 
@@ -58,6 +95,7 @@ function hydrateOrder() {
   clienteTelefono.value = order.clienteTelefono || client?.telefono || ''
   clienteDireccion.value = client?.direccion || ''
   selectedClientId.value = order.clienteId
+  clientStep.value = 'order'
   lines.value = (order.listaProductos || order.detalles || []).map((detail) => {
     const variantes: Record<number, number | null> = {}
     if (detail.productoId) variantes[detail.productoId] = detail.varianteId ?? null
@@ -118,6 +156,8 @@ async function loadVariants(productId: number) {
 }
 
 async function selectOrderItem(line: OrderLine, value: string) {
+  activePickerIndex.value = null
+  itemSearch.value = ''
   line.selection = value
   line.productoId = null
   line.comboId = null
@@ -152,25 +192,27 @@ function normalizeTelephone(value: string) {
   return value.replace(/\D/g, '')
 }
 
-function updateTelephone(value: string) {
-  if (normalizeTelephone(value) !== normalizeTelephone(clienteTelefono.value)) {
-    if (selectedClientId.value !== null) {
-      clienteNombre.value = ''
-      clienteDireccion.value = ''
-    }
-    selectedClientId.value = null
-  }
-  clienteTelefono.value = value
+function selectionLabel(line: OrderLine) {
+  return filteredOrderItems.value.find((option) => option.selection === line.selection)?.name
+    || products.value.find((product) => line.productoId === product.id)?.nombre
+    || combos.value.find((combo) => line.comboId === combo.id)?.nombre
+    || ''
 }
 
 function selectClient(client: Cliente) {
   selectedClientId.value = client.id ?? null
   clienteNombre.value = client.nombre
+  clienteTelefono.value = client.telefono
   clienteDireccion.value = client.direccion || ''
+  clientStep.value = 'order'
 }
 
-function clearSelectedClient() {
+function openNewClientForm() {
   selectedClientId.value = null
+  clienteNombre.value = ''
+  clienteTelefono.value = ''
+  clienteDireccion.value = ''
+  clientStep.value = 'new'
 }
 
 async function getOrCreateClient() {
@@ -178,13 +220,11 @@ async function getOrCreateClient() {
   const client = selectedClientId.value
     ? clients.value.find((item) => item.id === selectedClientId.value)
     : undefined
-  if (client && normalizeTelephone(client.telefono) === normalizeTelephone(clienteTelefono.value)) return client
-  selectedClientId.value = null
-
-  const matches = clientsForTelephone.value
-  if (matches.length) {
-    throw new Error('Ya existe un cliente con ese WhatsApp. Selecciónalo antes de guardar el pedido.')
-  }
+  if (client) return client
+  const duplicate = clients.value.find((item) =>
+    normalizePhoneNumber(item.telefono) === normalizePhoneNumber(clienteTelefono.value),
+  )
+  if (duplicate) throw new Error(`Ese WhatsApp ya está registrado en el nombre "${duplicate.nombre}".`)
 
   try {
     return await api.create<Cliente>('clientes', {
@@ -195,23 +235,44 @@ async function getOrCreateClient() {
   } catch (reason) {
     if (!(reason instanceof ApiError) || reason.status !== 409) throw reason
     clients.value = await api.list<Cliente>('clientes')
-    const racedClient = clientsForTelephone.value[0]
-    if (racedClient) return racedClient
+    const racedClient = clients.value.find((item) =>
+      normalizePhoneNumber(item.telefono) === normalizePhoneNumber(clienteTelefono.value),
+    )
+    if (racedClient) {
+      throw new Error(`Ese WhatsApp ya está registrado en el nombre "${racedClient.nombre}".`)
+    }
     throw reason
   }
 }
 
-async function retryClientLookup() {
-  clientsLoading.value = true
-  clientLookupError.value = ''
-  try {
-    clients.value = await api.list<Cliente>('clientes')
-    clientsLoaded.value = true
-  } catch (reason) {
-    clientLookupError.value = reason instanceof Error ? reason.message : 'No se pudieron cargar los clientes.'
-  } finally {
-    clientsLoading.value = false
+function continueWithNewClient() {
+  error.value = ''
+  if (!clienteNombre.value.trim() || !clienteTelefono.value.trim()) {
+    error.value = 'Nombre y WhatsApp del cliente son obligatorios.'
+    return
   }
+  if (!isValidPhoneNumber(clienteTelefono.value)) {
+    error.value = 'Introduce un WhatsApp válido para el prefijo seleccionado.'
+    return
+  }
+  if (duplicateClient.value) {
+    error.value = duplicateClientMessage.value
+    return
+  }
+  clientStep.value = 'order'
+}
+
+async function retryClientLookup() {
+  await loadOptions()
+}
+
+function changeClient() {
+  selectedClientId.value = null
+  clienteNombre.value = ''
+  clienteTelefono.value = ''
+  clienteDireccion.value = ''
+  clientStep.value = 'choice'
+  error.value = ''
 }
 
 function comboForLine(line: OrderLine): Combo | undefined {
@@ -290,7 +351,15 @@ async function save() {
     error.value = 'Nombre y WhatsApp del cliente son obligatorios.'
     return
   }
+  if (!props.order && !isValidPhoneNumber(clienteTelefono.value)) {
+    error.value = 'Introduce un WhatsApp válido para el prefijo seleccionado.'
+    return
+  }
   const validLines = lines.value.filter((line) => line.selection && line.cantidad > 0)
+  if (lines.value.some((line) => !line.selection || !Number.isInteger(line.cantidad) || line.cantidad < 1)) {
+    error.value = 'Selecciona un producto o combo y una cantidad válida en cada línea.'
+    return
+  }
   if (!validLines.length) {
     error.value = 'Añade al menos un producto o combo con cantidad.'
     return
@@ -368,50 +437,85 @@ onMounted(() => void loadOptions())
         <div><p class="eyebrow">Ventas</p><h3>{{ props.order ? 'Editar pedido' : 'Añadir pedido' }}</h3></div>
         <button type="button" aria-label="Cerrar" @click="emit('close')"><X :size="18" /></button>
       </header>
-      <div class="section-title">Información del cliente</div>
-      <div class="client-lookup">
-        <p class="lookup-instruction">{{ props.order ? 'Cliente asociado a este pedido.' : 'Primero escribe el WhatsApp para buscar al cliente.' }}</p>
-        <label>WhatsApp<input :value="clienteTelefono" type="tel" required autocomplete="tel" :readonly="Boolean(props.order)" @input="updateTelephone(($event.target as HTMLInputElement).value)" /></label>
-        <div v-if="clientsLoading" class="client-match-state"><LoaderCircle class="spin" :size="15" /> Buscando clientes...</div>
+      <section v-if="!props.order && clientStep === 'choice'" class="client-step">
+        <h4>¿El pedido es para un cliente existente o uno nuevo?</h4>
+        <p>Selecciona cómo quieres asociar el cliente al pedido.</p>
+        <div v-if="clientsLoading" class="client-match-state"><LoaderCircle class="spin" :size="15" /> Cargando clientes...</div>
         <div v-else-if="clientLookupError" class="client-match-state lookup-error" role="alert">
-          <span>No se pudo consultar la lista de clientes. {{ clientLookupError }}</span>
+          <span>No se pudo cargar la lista de clientes. {{ clientLookupError }}</span>
           <button type="button" @click="retryClientLookup">Reintentar</button>
         </div>
-        <section v-else-if="!props.order && clientsForTelephone.length" class="client-match" aria-live="polite">
-          <template v-if="!selectedClient">
-            <strong>Ya existe un cliente con este WhatsApp</strong>
-            <p>Selecciona el cliente para completar sus datos:</p>
-            <button v-for="client in clientsForTelephone" :key="client.id" class="client-match-option" type="button" @click="selectClient(client)">
-              <span><strong>{{ client.nombre }}</strong><small>{{ client.direccion || 'Sin dirección registrada' }}</small></span>
-              <span class="choose-client">Seleccionar</span>
-            </button>
-          </template>
-          <div v-else class="selected-client">
-            <span><strong>Cliente seleccionado: {{ selectedClient.nombre }}</strong><small>{{ selectedClient.direccion || 'Sin dirección registrada' }}</small></span>
-            <button type="button" @click="clearSelectedClient">Cambiar</button>
-          </div>
-        </section>
-        <p v-else-if="!props.order && clientsLoaded && normalizeTelephone(clienteTelefono)" class="client-match-state new-client-hint" aria-live="polite">
-          No existe un cliente con este WhatsApp. Completa sus datos y se creará al guardar el pedido.
-        </p>
-      </div>
-      <div v-if="props.order || selectedClient || (clientsLoaded && !clientsForTelephone.length && normalizeTelephone(clienteTelefono))" class="fields client-fields">
-        <label>Nombre<input v-model="clienteNombre" type="text" required :readonly="Boolean(props.order || selectedClient)" /></label>
-        <label>Dirección<input v-model="clienteDireccion" type="text" :readonly="Boolean(props.order || selectedClient)" /></label>
+        <div v-else class="client-choice-grid">
+          <button class="client-choice" type="button" @click="clientStep = 'existing'">
+            <strong>Cliente existente</strong><span>Buscar por nombre o WhatsApp</span>
+          </button>
+          <button class="client-choice" type="button" @click="openNewClientForm">
+            <strong>Cliente nuevo</strong><span>Registrar sus datos</span>
+          </button>
+        </div>
+      </section>
+
+      <section v-else-if="!props.order && clientStep === 'existing'" class="client-step">
+        <h4>Seleccionar cliente</h4>
+        <label class="client-search">Filtrar por nombre o WhatsApp
+          <input v-model="clientSearch" type="search" placeholder="Nombre o WhatsApp" autocomplete="off" />
+        </label>
+        <div v-if="clientsLoading" class="client-match-state"><LoaderCircle class="spin" :size="15" /> Cargando clientes...</div>
+        <div v-else class="client-list">
+          <button v-for="client in filteredClients" :key="client.id" class="client-match-option" type="button" @click="selectClient(client)">
+            <span><strong>{{ client.nombre }}</strong><small>{{ client.telefono }} · {{ client.direccion || 'Sin dirección registrada' }}</small></span>
+            <span class="choose-client">Seleccionar</span>
+          </button>
+          <p v-if="!filteredClients.length" class="client-list-empty">
+            {{ clients.length ? 'No hay clientes que coincidan con el filtro.' : 'Aún no tienes clientes registrados.' }}
+          </p>
+        </div>
+        <footer class="actions">
+          <button class="secondary" type="button" @click="clientStep = 'choice'">Volver</button>
+          <button class="secondary" type="button" @click="emit('close')">Cancelar</button>
+        </footer>
+      </section>
+
+      <section v-else-if="!props.order && clientStep === 'new'" class="client-step">
+        <h4>Información del nuevo cliente</h4>
+        <div class="fields client-fields">
+          <label>Nombre<input v-model="clienteNombre" type="text" required autocomplete="name" /></label>
+          <label>WhatsApp<PhoneInput v-model="clienteTelefono" required /></label>
+          <label>Dirección<input v-model="clienteDireccion" type="text" autocomplete="street-address" /></label>
+        </div>
+        <p v-if="duplicateClientMessage" class="error" role="alert">{{ duplicateClientMessage }}</p>
+        <p v-else-if="clientLookupError" class="error" role="alert">{{ clientLookupError }}</p>
+        <p v-if="error && !duplicateClientMessage" class="error" role="alert">{{ error }}</p>
+        <footer class="actions">
+          <button class="secondary" type="button" @click="clientStep = 'choice'; error = ''">Volver</button>
+          <button class="secondary" type="button" @click="emit('close')">Cancelar</button>
+          <button class="primary" type="button" :disabled="!clientsLoaded || Boolean(duplicateClientMessage)" @click="continueWithNewClient">Continuar</button>
+        </footer>
+      </section>
+
+      <div v-else>
+      <div class="selected-client">
+        <span><strong>{{ clienteNombre }}</strong><small>{{ clienteTelefono }} · {{ clienteDireccion || 'Sin dirección registrada' }}</small></span>
+        <button v-if="!props.order" type="button" @click="changeClient">Cambiar cliente</button>
       </div>
       <div class="section-title line-title">Productos y combos</div>
       <div class="lines">
         <section v-for="(line, index) in lines" :key="index" class="order-line">
           <div class="line">
-            <select :value="line.selection" required @change="selectOrderItem(line, ($event.target as HTMLSelectElement).value)">
-              <option value="">Selecciona un producto o combo</option>
-              <optgroup label="Productos">
-                <option v-for="product in products" :key="product.id" :value="`producto:${product.id}`">{{ product.nombre }} · {{ product.precioVenta }}</option>
-              </optgroup>
-              <optgroup v-if="combos.length" label="Combos">
-                <option v-for="combo in combos" :key="combo.id" :value="`combo:${combo.id}`">{{ combo.nombre }} · {{ combo.precio }}</option>
-              </optgroup>
-            </select>
+            <div class="item-picker-wrap">
+              <button class="item-picker-trigger" type="button" :aria-expanded="activePickerIndex === index" @click="activePickerIndex = activePickerIndex === index ? null : index; itemSearch = ''">
+                <span>{{ selectionLabel(line) || 'Selecciona un producto o combo' }}</span><ChevronDown :size="17" />
+              </button>
+              <div v-if="activePickerIndex === index" class="item-picker">
+                <label class="item-search"><Search :size="16" /><input v-model="itemSearch" type="search" placeholder="Filtrar por nombre" autocomplete="off" /></label>
+                <div class="item-picker-list">
+                  <button v-for="option in filteredOrderItems" :key="option.selection" class="item-option" type="button" @click="selectOrderItem(line, option.selection)">
+                    <span><strong>{{ option.name }}</strong><small>{{ option.type }}</small></span><span class="item-price">{{ option.detail }}</span>
+                  </button>
+                  <p v-if="!filteredOrderItems.length" class="client-list-empty">No hay productos o combos que coincidan con el filtro.</p>
+                </div>
+              </div>
+            </div>
             <input v-model.number="line.cantidad" type="number" min="1" step="1" aria-label="Cantidad" />
             <button type="button" title="Quitar línea" :disabled="lines.length === 1" @click="removeLine(index)"><Trash2 :size="16" /></button>
           </div>
@@ -419,7 +523,7 @@ onMounted(() => void loadOptions())
             <span>Variante de {{ products.find((item) => item.id === line.productoId)?.nombre }}</span>
             <select v-model.number="line.variantes[line.productoId]" required>
               <option :value="null">Selecciona la variante</option>
-              <option v-for="variant in variantOptions[line.productoId]" :key="variant.id" :value="variant.id">{{ variant.nombre }} · {{ variant.precio }}</option>
+              <option v-for="variant in variantOptions[line.productoId]" :key="variant.id" :value="variant.id">{{ variant.nombre }} · {{ variant.precio }} {{ variant.monedaVenta || 'CUP' }}</option>
             </select>
           </div>
           <div v-if="loadingVariants.length" class="loading-variants"><LoaderCircle class="spin" :size="14" /> Cargando variantes...</div>
@@ -443,10 +547,14 @@ onMounted(() => void loadOptions())
         <button class="secondary" type="button" @click="emit('close')">Cancelar</button>
         <button class="primary" type="submit" :disabled="loading || loadingVariants.length > 0"><LoaderCircle v-if="loading || loadingVariants.length > 0" class="spin" :size="16" /><Save v-else :size="16" /> {{ props.order ? 'Guardar cambios' : 'Guardar pedido' }}</button>
       </footer>
+      </div>
     </form>
   </div>
 </template>
 
 <style scoped>
 .modal-layer{position:fixed;inset:0;z-index:30;display:grid;place-items:center;overflow-y:auto;padding:20px;background:rgba(0,0,0,.66)}.modal{width:min(720px,100%);max-height:calc(100dvh - 40px);overflow:auto;padding:24px;border-radius:16px;background:#fff;box-shadow:0 20px 60px rgba(0,0,0,.28)}.modal-head,.actions{display:flex;align-items:center;justify-content:space-between;gap:14px}.modal-head h3{margin:6px 0 0;color:#171717;font-size:24px}.modal-head button{border:0;background:transparent;color:#777;cursor:pointer}.eyebrow{margin:0;color:#777;font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}.section-title{margin-top:22px;color:#171717;font-weight:800}.client-lookup{display:grid;gap:9px;margin:14px 0}.lookup-instruction{margin:0;color:#777;font-size:13px}.client-lookup>label,.fields label{display:grid;gap:7px;color:#333;font-size:13px;font-weight:700}.fields{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:14px 0}.fields label:last-child{grid-column:1/-1}.fields input,.client-lookup input,.line select,.line input,.variant-choice select,.component-choice select{min-width:0;padding:11px;border:1px solid #e8e8e8;border-radius:8px;font:inherit}.fields input:read-only{background:#fafafa;color:#777}.client-match{display:grid;gap:8px;padding:12px;border:1px solid #e8e8e8;border-radius:10px;background:#fafafa;color:#333;font-size:13px}.client-match>p{margin:0;color:#777}.client-match-option,.selected-client{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px;border:1px solid #e8e8e8;border-radius:8px;background:#fff;text-align:left}.client-match-option{cursor:pointer}.client-match-option>span:first-child,.selected-client>span{display:grid;gap:4px}.client-match-option small,.selected-client small{color:#777}.choose-client,.selected-client button{flex:0 0 auto;border:0;background:transparent;color:#c65b19;font-weight:700}.client-match-state{display:flex;align-items:center;gap:7px;color:#777;font-size:12px}.lookup-error{color:#a8584e}.lookup-error button{border:0;background:transparent;color:#c65b19;font-weight:700;cursor:pointer}.new-client-hint{padding:10px;border-radius:8px;background:#fff6f0;color:#c65b19}.line-title{border-top:1px solid #edf1ed;padding-top:18px}.lines{display:grid;gap:12px}.order-line{padding:11px;border:1px solid #e8e8e8;border-radius:11px}.line{display:grid;grid-template-columns:minmax(0,1fr) 90px 38px;gap:8px}.line button{border:0;border-radius:8px;background:#fff2ef;color:#a8584e;cursor:pointer}.line button:disabled{opacity:.4;cursor:not-allowed}.variant-choice,.component-choice{display:grid;grid-template-columns:minmax(0,1fr) minmax(150px,220px);align-items:center;gap:10px;margin-top:9px;color:#777;font-size:12px}.combo-components{display:grid;gap:8px;margin-top:12px;padding:11px;border-radius:9px;background:#fafafa}.combo-components>strong{font-size:12px}.component-choice{margin:0}.component-choice small{grid-column:2;color:#777}.no-variants{color:#777;text-align:right}.loading-variants{display:flex;align-items:center;gap:6px;margin-top:8px;color:#777;font-size:12px}.add-line{display:inline-flex;align-items:center;gap:5px;margin-top:12px;border:0;background:transparent;color:#c65b19;font-weight:700;cursor:pointer}.actions{justify-content:flex-end;margin-top:20px}.primary,.secondary{display:inline-flex;align-items:center;gap:7px;border:0;border-radius:9px;padding:11px 14px;font-weight:700;cursor:pointer}.primary{background:#171717;color:#fff}.secondary{background:#fff6f0;color:#c65b19}.error{color:#a8584e}.spin{animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}@media(max-width:560px){.fields{grid-template-columns:1fr}.fields label:last-child{grid-column:auto}.client-match-option,.selected-client{align-items:flex-start;flex-direction:column}.line{grid-template-columns:minmax(0,1fr) 70px 34px}.variant-choice,.component-choice{grid-template-columns:1fr}.component-choice small{grid-column:auto}.no-variants{text-align:left}}
+ .client-step{display:grid;gap:14px;margin-top:18px}.client-step h4{margin:0;color:#171717;font-size:18px}.client-step>p{margin:0;color:#777;font-size:13px}.client-choice-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.client-choice{display:grid;gap:8px;min-height:110px;padding:18px;border:1px solid #e8e8e8;border-radius:11px;background:#fff;text-align:left;cursor:pointer}.client-choice:hover,.client-match-option:hover{border-color:#e4a77d;background:#fffaf6}.client-choice strong{color:#171717;font-size:15px}.client-choice span{color:#777;font-size:13px}.client-search{display:grid;gap:7px;color:#333;font-size:13px;font-weight:700}.client-search input{padding:11px;border:1px solid #e8e8e8;border-radius:8px;font:inherit}.client-list{display:grid;gap:8px;max-height:300px;overflow:auto}.client-list-empty{margin:8px 0;color:#777;font-size:13px}.selected-client button{cursor:pointer}.client-step .actions{margin-top:4px}
+ .line-title{margin-bottom:16px}.lines{margin-top:12px}.item-picker-wrap{position:relative;min-width:0}.line .item-picker-trigger{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-height:42px;padding:10px 11px;border:1px solid #e8e8e8;border-radius:8px;background:#fff;color:#333;text-align:left;font:inherit;cursor:pointer}.item-picker-trigger>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.line .item-picker-trigger:hover{border-color:#d6a17f}.item-picker{display:grid;gap:8px;margin-top:8px;padding:9px;border:1px solid #e8e8e8;border-radius:10px;background:#fff;box-shadow:0 10px 25px rgba(0,0,0,.1)}.item-search{display:flex;align-items:center;gap:8px;padding:9px 10px;border:1px solid #e8e8e8;border-radius:8px;color:#777}.item-search input{width:100%;min-width:0;border:0;outline:0;background:transparent;font:inherit}.item-picker-list{display:grid;gap:5px;max-height:210px;overflow:auto}.line .item-option{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px;border:0;border-radius:7px;background:#fff;color:#333;text-align:left;cursor:pointer}.item-option:hover{background:#fff6f0}.item-option>span:first-child{display:grid;gap:3px}.item-option small{color:#777;font-size:11px}.item-price{flex:0 0 auto;color:#555;font-size:12px}
+ @media(max-width:560px){.client-choice-grid{grid-template-columns:1fr}.client-choice{min-height:85px}}
 </style>

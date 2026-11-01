@@ -70,7 +70,7 @@ const profile = ref({
   nombreUsuario: username.value,
   nombre: 'Administrador',
   apellido: '',
-  correo: '',
+  email: '',
   telefono: '',
   fotoPerfil: '',
   rol: 'USER' as 'USER' | 'ADMIN',
@@ -177,6 +177,11 @@ function editCatalog(catalog: Catalogo) {
   if (activeView.value !== 'catalogo') selectView('catalogo')
 }
 
+function previewCatalog(catalogId: number) {
+  window.history.pushState({}, '', `/catalogoCont/${catalogId}`)
+  window.dispatchEvent(new PopStateEvent('popstate'))
+}
+
 function catalogSaved() {
   catalogFormVisible.value = false
   catalogToEdit.value = null
@@ -204,6 +209,7 @@ async function saveProfile(password?: { current: string; next: string }) {
     nombre: profile.value.nombre,
     wapp: profile.value.telefono,
     urlFotoPerfil: profile.value.fotoPerfil,
+	email: profile.value.email,
   })
 
   if (password) {
@@ -298,6 +304,8 @@ onMounted(async () => {
       username?: string
       nombre?: string
       apellido?: string
+      email?: string
+      gmail?: string
       correo?: string
       wapp?: string
       urlFotoPerfil?: string
@@ -309,7 +317,7 @@ onMounted(async () => {
       nombreUsuario: user.username || profile.value.nombreUsuario,
       nombre: user.nombre || profile.value.nombre,
       apellido: user.apellido || '',
-      correo: user.correo || '',
+      email: user.gmail || user.email || user.correo || '',
       telefono: user.wapp || '',
       fotoPerfil: user.urlFotoPerfil || '',
       rol: user.rol || 'USER',
@@ -447,6 +455,7 @@ function handlePopState() {
         :catalog="activeView === 'nuevo-catalogo' ? catalogToEdit || undefined : undefined"
         @create="createCatalog"
         @edit="editCatalog"
+        @preview="previewCatalog"
         @cancel="selectView('catalogo')"
         @created="catalogSaved"
       />
@@ -469,7 +478,7 @@ function handlePopState() {
       @update:nombre-usuario="profile.nombreUsuario = $event"
       @update:nombre="profile.nombre = $event"
       @update:apellido="profile.apellido = $event"
-      @update:correo="profile.correo = $event"
+      @update:email="profile.email = $event"
       @update:telefono="profile.telefono = $event"
       @update:foto-perfil="profile.fotoPerfil = $event"
     />

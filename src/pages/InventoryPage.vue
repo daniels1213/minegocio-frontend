@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import type { Variante } from '../api'
+import ResponsiveRowInfoModal from '../components/ResponsiveRowInfoModal.vue'
 
-const props = defineProps<{
-  variants: Variante[]
-}>()
+const props = defineProps<{ variants: Variante[] }>()
+const detailVariant = ref<Variante | null>(null)
+
 </script>
 
 <template>
@@ -22,6 +24,7 @@ const props = defineProps<{
           <th>Existencia</th>
           <th>Mínimo</th>
           <th>Estado</th>
+          <th class="variant-info-cell">Info</th>
         </tr>
       </thead>
       <tbody>
@@ -35,9 +38,22 @@ const props = defineProps<{
               {{ variant.existencia <= variant.existenciaMinima ? 'Bajo' : 'OK' }}
             </span>
           </td>
+          <td class="variant-info-cell"><button class="variant-info" type="button" :aria-label="`Ver información de ${variant.nombre}`" @click="detailVariant = variant">Ver info</button></td>
         </tr>
       </tbody>
     </table>
+    <ResponsiveRowInfoModal
+      v-if="detailVariant"
+      :title="detailVariant.nombre"
+      :fields="[
+        { label: 'Código', value: detailVariant.codigo },
+        { label: 'Nombre', value: detailVariant.nombre },
+        { label: 'Existencia', value: detailVariant.existencia },
+        { label: 'Mínimo', value: detailVariant.existenciaMinima },
+        { label: 'Estado', value: detailVariant.existencia <= detailVariant.existenciaMinima ? 'Bajo' : 'OK' },
+      ]"
+      @close="detailVariant = null"
+    />
   </section>
 </template>
 
@@ -70,6 +86,9 @@ th {
   color: #a0483f;
   font-weight: 700;
 }
+.variant-info-cell,.variant-info{display:none}
+.variant-info{padding:7px 10px;border:0;border-radius:7px;background:#fff6f0;color:#c65b19;font:inherit;font-weight:700;cursor:pointer}
+@media(max-width:600px){table,tbody{display:grid;width:100%;gap:8px}thead,tbody td:nth-child(1),tbody td:nth-child(4),tbody td:nth-child(5){display:none}tbody tr{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:8px;padding:10px;border:1px solid #e8e8e8;border-radius:9px}tbody td{padding:0;border:0}tbody td:nth-child(2){min-width:0;font-weight:700;overflow-wrap:anywhere}tbody td:nth-child(3){font-weight:700}.variant-info-cell{display:table-cell}.variant-info{display:block;font-size:12px;padding:7px}}
 .empty {
   color: #6f7d76;
   padding: 18px 0;

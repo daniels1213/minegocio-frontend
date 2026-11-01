@@ -1,12 +1,26 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { Pencil, Plus, RefreshCw, Save, Trash2, X } from 'lucide-vue-next'
+import { computed, onMounted, ref } from 'vue'
+import { Eye, Pencil, Plus, RefreshCw, Save, Search, Trash2, X } from 'lucide-vue-next'
 import { api } from '../api.ts'
 import DeleteConfirmModal from './DeleteConfirmModal.vue'
+import PhoneInput from './PhoneInput.vue'
+import ResponsiveRowInfoModal from './ResponsiveRowInfoModal.vue'
+import { isValidPhoneNumber } from '../phone.ts'
 
 export interface CrudField { key: string; label: string; type?: string; required?: boolean; placeholder?: string }
-const props = defineProps<{ title: string; description: string; resource: string; fields: CrudField[] }>()
+const props = withDefaults(defineProps<{
+  title: string
+  description: string
+  resource: string
+  fields: CrudField[]
+  searchFields?: string[]
+  searchPlaceholder?: string
+}>(), {
+  searchFields: () => ['nombre'],
+  searchPlaceholder: 'Filtrar por nombre',
+})
 const rows = ref<Record<string, unknown>[]>([])
+const search = ref('')
 const form = ref<Record<string, string | number>>({})
 const editingId = ref<number | null>(null)
 const loading = ref(false)
@@ -15,6 +29,17 @@ const error = ref('')
 const showForm = ref(false)
 const deleteTargetRow = ref<Record<string, unknown> | null>(null)
 const showDeleteModal = ref(false)
+const infoRow = ref<Record<string, unknown> | null>(null)
+const filteredRows = computed(() => {
+  const query = search.value.trim().toLocaleLowerCase()
+  if (!query) return rows.value
+  const digits = /^[+\d\s().-]+$/.test(query) ? query.replace(/\D/g, '') : ''
+  return rows.value.filter((row) => props.searchFields.some((key) => {
+    const value = String(row[key] ?? '')
+    if (value.toLocaleLowerCase().includes(query)) return true
+    return digits.length > 0 && ['telefono', 'wapp'].includes(key) && value.replace(/\D/g, '').includes(digits)
+  }))
+})
 
 function resetForm() { form.value = Object.fromEntries(props.fields.map(field => [field.key, ''])); editingId.value = null; showForm.value = true; error.value = '' }
 function edit(row: Record<string, unknown>) { form.value = Object.fromEntries(props.fields.map(field => [field.key, String(row[field.key] ?? '')])); editingId.value = Number(row.id); showForm.value = true; error.value = '' }
@@ -22,6 +47,9 @@ function closeForm() { showForm.value = false; error.value = '' }
 async function load() { loading.value = true; error.value = ''; try { rows.value = await api.list<Record<string, unknown>>(props.resource) } catch (reason) { error.value = reason instanceof Error ? reason.message : 'No se pudo cargar la información.' } finally { loading.value = false } }
 async function save() {
   if (props.fields.some(field => field.required && !String(form.value[field.key] ?? '').trim())) { error.value = 'Completa los campos obligatorios.'; return }
+  const phoneField = props.fields.find(field => field.type === 'tel' || ['telefono', 'wapp'].includes(field.key))
+  const phoneValue = phoneField ? String(form.value[phoneField.key] ?? '').trim() : ''
+  if (phoneValue && !isValidPhoneNumber(phoneValue)) { error.value = 'Introduce un número de teléfono válido para el prefijo seleccionado.'; return }
   saving.value = true; error.value = ''
   try { if (editingId.value) await api.update(props.resource, editingId.value, form.value); else await api.create(props.resource, form.value); closeForm(); await load() } catch (reason) { error.value = reason instanceof Error ? reason.message : 'No se pudo guardar.' } finally { saving.value = false }
 }
@@ -53,11 +81,15 @@ onMounted(load)
     <div v-if="error && !showForm" class="notice">{{ error }}</div>
     <div v-if="loading" class="state"><RefreshCw :size="24" class="spin" /> Cargando...</div>
     <div v-else-if="!rows.length" class="state"><p>Aún no hay registros.</p><button class="secondary" type="button" @click="resetForm">Crear el primero</button></div>
-    <div v-else class="table-wrap"><table><thead><tr><th v-for="field in fields" :key="field.key">{{ field.label }}</th><th>Acciones</th></tr></thead><tbody><tr v-for="row in rows" :key="String(row.id)"><td v-for="field in fields" :key="field.key">{{ row[field.key] || '—' }}</td><td class="actions"><button type="button" title="Editar" @click="edit(row)"><Pencil :size="16" /></button><button type="button" title="Eliminar" @click="remove(row)"><Trash2 :size="16" /></button></td></tr></tbody></table></div>
+    <template v-else>
+      <label class="filter-input"><Search :size="17" /><input v-model="search" type="search" :placeholder="searchPlaceholder" :aria-label="searchPlaceholder" /></label>
+      <div v-if="!filteredRows.length" class="state filter-empty"><p>No se encontraron registros que coincidan con el filtro.</p></div>
+      <div v-else class="table-wrap"><table><thead><tr><th v-for="field in fields" :key="field.key">{{ field.label }}</th><th>Acciones</th></tr></thead><tbody><tr v-for="row in filteredRows" :key="String(row.id)"><td v-for="field in fields" :key="field.key">{{ row[field.key] || '—' }}</td><td class="actions"><button class="mobile-info-button" type="button" title="Ver toda la información" :aria-label="`Ver información de ${row.nombre || 'registro'}`" @click="infoRow = row"><Eye :size="16" /></button><button type="button" title="Editar" @click="edit(row)"><Pencil :size="16" /></button><button type="button" title="Eliminar" @click="remove(row)"><Trash2 :size="16" /></button></td></tr></tbody></table></div>
+    </template>
     <div v-if="showForm" class="modal-layer" @click.self="closeForm">
       <form class="form-card" role="dialog" aria-modal="true" :aria-label="`${editingId ? 'Editar' : 'Nuevo'} registro`" @submit.prevent="save">
         <div class="form-heading"><h3>{{ editingId ? 'Editar' : 'Nuevo' }} registro</h3><button type="button" aria-label="Cerrar" @click="closeForm"><X :size="18" /></button></div>
-        <div class="fields"><label v-for="field in fields" :key="field.key">{{ field.label }}<textarea v-if="field.type === 'textarea'" v-model="form[field.key]" :placeholder="field.placeholder" :required="field.required" rows="3" /><input v-else v-model="form[field.key]" :type="field.type || 'text'" :placeholder="field.placeholder" :required="field.required" /></label></div>
+        <div class="fields"><label v-for="field in fields" :key="field.key">{{ field.label }}<textarea v-if="field.type === 'textarea'" v-model="form[field.key]" :placeholder="field.placeholder" :required="field.required" rows="3" /><PhoneInput v-else-if="field.type === 'tel' || ['telefono', 'wapp'].includes(field.key)" :model-value="String(form[field.key] ?? '')" :required="field.required" :label="field.label" @update:model-value="form[field.key] = $event" /><input v-else v-model="form[field.key]" :type="field.type || 'text'" :placeholder="field.placeholder" :required="field.required" /></label></div>
         <p v-if="error" class="error">{{ error }}</p>
         <div class="form-actions"><button class="secondary" type="button" @click="closeForm">Cancelar</button><button class="primary" type="submit" :disabled="saving"><Save :size="16" /> {{ saving ? 'Guardando...' : 'Guardar' }}</button></div>
       </form>
@@ -69,6 +101,12 @@ onMounted(load)
       :loading="false"
       @confirm="confirmDelete"
       @cancel="showDeleteModal = false; deleteTargetRow = null"
+    />
+    <ResponsiveRowInfoModal
+      v-if="infoRow"
+      :title="String(infoRow.nombre || title)"
+      :fields="fields.map((field) => ({ label: field.label, value: String(infoRow?.[field.key] ?? '') }))"
+      @close="infoRow = null"
     />
   </section>
 </template>
@@ -177,6 +215,10 @@ onMounted(load)
   color: #c65b19;
 }
 
+.mobile-info-button {
+  display: none !important;
+}
+
 .secondary:hover:not(:disabled) {
   background: #ffeadc;
 }
@@ -228,6 +270,44 @@ textarea:focus-visible {
   font-size: 13px;
   line-height: 1.5;
   overflow-wrap: anywhere;
+}
+
+.filter-input {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(460px, 100%);
+  min-height: 44px;
+  margin: 0 0 16px;
+  padding: 0 13px;
+  border: 1px solid #e8e8e8;
+  border-radius: 9px;
+  background: #fff;
+  color: #777;
+}
+
+.filter-input:focus-within {
+  border-color: #c65b19;
+  outline: 2px solid rgba(198, 91, 25, 0.12);
+}
+
+.filter-input input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #171717;
+  font: inherit;
+  font-size: 13px;
+}
+
+.filter-input input:focus-visible {
+  outline: 0;
+}
+
+.filter-empty {
+  min-height: 150px;
 }
 
 /* =========================
@@ -513,26 +593,61 @@ textarea:focus-visible {
     padding: 18px;
   }
 
-  /* La tabla se desplaza horizontalmente */
-
-  .table-wrap table {
-    min-width: 420px;
+  .table-wrap {
+    overflow: visible;
+    border: 0;
+    background: transparent;
   }
 
-  .table-wrap th,
-  .table-wrap td {
-    padding: 11px 10px;
-    font-size: 12px;
+  .table-wrap table,
+  .table-wrap tbody {
+    display: grid;
+    width: 100%;
+    min-width: 0;
+    gap: 9px;
+  }
+
+  .table-wrap thead,
+  .table-wrap tbody tr > td:not(:first-child):not(.actions) {
+    display: none;
+  }
+
+  .table-wrap tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid #e8e8e8;
+    border-radius: 10px;
+    background: #fff;
+  }
+
+  .table-wrap tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
+  .table-wrap tbody tr > td:first-child {
+    min-width: 0;
+    padding: 4px 0;
+    border: 0;
+    font-size: 13px;
+    font-weight: 700;
+    overflow-wrap: anywhere;
   }
 
   .actions {
-    gap: 6px;
+    gap: 5px;
   }
 
   .actions button {
-    width: 34px;
-    height: 34px;
-    min-width: 34px;
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+  }
+
+  .mobile-info-button {
+    display: inline-flex !important;
   }
 
   /* Modal adaptado al móvil */

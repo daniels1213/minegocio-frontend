@@ -1,9 +1,11 @@
 export type EstadoPedido = 'PENDIENTE' | 'CONFIRMADO' | 'PREPARANDO' | 'LISTO' | 'EN_ENTREGA' | 'ENTREGADO' | 'CANCELADO'
 export type TipoMovimiento = 'COMPRA' | 'VENTA' | 'AJUSTE_INVENTARIO' | 'MERMA' | 'REGALO' | 'OTRO' | 'DEVOLUCION'
+export type Moneda = 'USD' | 'CUP'
 export interface EntityReference { id: number; label: string }
 export interface Cliente { id?: number; nombre: string; telefono: string; direccion?: string }
 export interface Proveedor { id?: number; nombre?: string; telefono?: string; direccion?: string }
-export interface Producto { id?: number; nombre: string; descripcion?: string; urlFoto?: string; stockActual: number; precioVenta: number; ultimoPrecioCompra?: number; fechaCreacion?: string }
+export interface Producto { id?: number; nombre: string; descripcion?: string; urlFoto?: string; stockActual: number; precioVenta: number; monedaVenta?: Moneda; ultimoPrecioCompra?: number; fechaCreacion?: string }
+export interface ProductoProveedor { productoId: number; proveedorId: number; varianteId?: number; nombreVariante?: string; nombreProveedor: string; telefonoProveedor?: string; direccionProveedor?: string; precio: number; monedaCompra: Moneda }
 export interface Etiqueta { id: number; nombre: string; descripcion?: string }
 export interface FotoGaleria { url: string; descripcion?: string }
 export interface Catalogo { id?: number; usuarioId?: number; nombre: string; descripcion?: string; etiquetas?: Array<string | Etiqueta>; urlFotoPortada?: string; urlLogo?: string; whatsapp?: string; instagram?: string; facebook?: string; wappPropietario?: string; galeria?: FotoGaleria[]; fechaCreacion?: string; activo?: boolean; visible?: boolean; bloqueadoPorAdmin?: boolean }
@@ -17,15 +19,15 @@ export function normalizarGaleria(fotos: unknown): FotoGaleria[] {
 		return []
 	})
 }
-export interface VarianteCatalogo { id: number; nombre: string; urlFoto?: string; precio?: number | string; visible?: boolean }
-export interface CatalogoProducto { productoId?: number; varianteId?: number; comboId?: number; nombre: string; descripcion?: string; orden: number; urlFoto?: string; precioVenta?: number | string; visible?: boolean; componentes?: ComponenteCombo[]; variantes?: VarianteCatalogo[] }
-export interface Variante { id?: number; productoId: number; codigo: string; nombre: string; urlFoto?: string; precio: number; existencia: number; existenciaMinima: number; activa: boolean }
+export interface VarianteCatalogo { id: number; nombre: string; urlFoto?: string; precio?: number | string; monedaVenta?: Moneda; visible?: boolean }
+export interface CatalogoProducto { productoId?: number; varianteId?: number; comboId?: number; nombre: string; descripcion?: string; orden: number; urlFoto?: string; precioVenta?: number | string; monedaVenta?: Moneda; visible?: boolean; componentes?: ComponenteCombo[]; variantes?: VarianteCatalogo[] }
+export interface Variante { id?: number; productoId: number; codigo: string; nombre: string; urlFoto?: string; precio: number; monedaVenta?: Moneda; existencia: number; existenciaMinima: number; activa: boolean }
 export interface ComponenteCombo { productoId: number; productoNombre?: string; urlFoto?: string; cantidad: number; varianteId?: number }
 export interface Combo { id?: number; nombre: string; urlFoto?: string; precio: number; componentes: ComponenteCombo[] }
-export interface DetallePedido { id?: number; productoId?: number; comboId?: number; nombre?: string; varianteId?: number; cantidad: number; precioUnitario: number; subtotal?: number; componentes?: ComponenteCombo[] }
-export interface Pedido { id?: number; numeroPedido?: number; clienteId: number; clienteNombre?: string; clienteTelefono?: string; estado?: EstadoPedido; subtotal: number; costoEntrega?: number; total: number; moneda?: string; detalles?: DetallePedido[]; listaProductos?: DetallePedido[]; fechaCreacion?: string; fecha?: string; ingresoTotal?: number }
+export interface DetallePedido { id?: number; productoId?: number; comboId?: number; nombre?: string; varianteId?: number; cantidad: number; precioUnitario: number; subtotal?: number; monedaVenta?: Moneda; componentes?: ComponenteCombo[] }
+export interface Pedido { id?: number; numeroPedido?: number; clienteId: number; clienteNombre?: string; clienteTelefono?: string; estado?: EstadoPedido; subtotal: number; costoEntrega?: number; total: number; moneda?: Moneda; detalles?: DetallePedido[]; listaProductos?: DetallePedido[]; fechaCreacion?: string; fecha?: string; ingresoTotal?: number }
 export interface Movimiento { id: number; productoId: number; productoNombre: string; varianteId?: number; varianteNombre?: string; tipo: TipoMovimiento; cantidad: number; stockAnterior: number; stockNuevo: number; fecha: string }
-export interface Usuario { id: number; username: string; nombre: string; wapp: string; rol: 'USER' | 'ADMIN'; urlFotoPerfil?: string; fechaCreacion?: string }
+export interface Usuario { id: number; username: string; nombre: string; apellido?: string; wapp: string; email?: string; gmail?: string; correo?: string; rol: 'USER' | 'ADMIN'; urlFotoPerfil?: string; fechaCreacion?: string }
 export class ApiError extends Error {
 	readonly status: number
 
@@ -157,10 +159,11 @@ export const api = {
 	eliminarPedido: (id: number) => request<void>(`/api/pedidos/${id}`, {
 		method: 'DELETE',
 	}),
-	createProductoProveedor: <T>(payload: { productoId: number; proveedorId: number; precio: number }) => request<T>('/api/producto-proveedores', {
+	createProductoProveedor: <T>(payload: { productoId: number; proveedorId: number; varianteId?: number; precio: number; monedaCompra: Moneda }) => request<T>('/api/producto-proveedores', {
 		method: 'POST',
 		body: JSON.stringify(payload),
 	}),
+	productoProveedores: <T>(productoId: number) => request<T[]>(`/api/producto-proveedores/producto/${productoId}`),
 	changePassword: (id: number, payload: { passwordActual: string; nuevaPassword: string }) => request<void>(`/api/usuarios/${id}/password`, {
 		method: 'PUT',
 		body: JSON.stringify(payload),
@@ -171,11 +174,11 @@ export const api = {
 	}),
 	movimientos: <T>(queryParams?: string) => request<T[]>(`/api/inventario/movimientos${queryParams ? '?' + queryParams : ''}`),
 	variantesProducto: <T>(productoId: number) => request<T[]>(`/api/productos/${productoId}/variantes`),
-	crearVariante: <T>(productoId: number, payload: { nombre: string; existencia: number; urlFoto?: string }) => request<T>(`/api/productos/${productoId}/variantes`, {
+	crearVariante: <T>(productoId: number, payload: { nombre: string; existencia: number; urlFoto?: string; precio?: number; monedaVenta?: Moneda }) => request<T>(`/api/productos/${productoId}/variantes`, {
 		method: 'POST',
 		body: JSON.stringify(payload),
 	}),
-	actualizarVariante: <T>(productoId: number, varianteId: number, payload: { nombre: string; urlFoto?: string }) => request<T>(`/api/productos/${productoId}/variantes/${varianteId}`, {
+	actualizarVariante: <T>(productoId: number, varianteId: number, payload: { nombre: string; urlFoto?: string; precio?: number; monedaVenta?: Moneda }) => request<T>(`/api/productos/${productoId}/variantes/${varianteId}`, {
 		method: 'PUT',
 		body: JSON.stringify(payload),
 	}),

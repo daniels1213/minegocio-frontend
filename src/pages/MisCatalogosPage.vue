@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { AlertCircle, ArrowDown, ArrowLeft, ArrowUp, ChevronDown, ChevronUp, Eye, EyeOff, Facebook, Globe2, ImagePlus, Instagram, Layers, LockKeyhole, MessageCircle, Package, Pencil, Plus, RefreshCw, Save, Search, Store, Tag, Trash2, X, Image } from 'lucide-vue-next'
-import type { Catalogo, CatalogoProducto, Etiqueta, FotoGaleria, Usuario, Variante } from '../api.ts'
+import { AlertCircle, ArrowDown, ArrowLeft, ArrowUp, Boxes, ChevronDown, ChevronUp, Eye, EyeOff, ImagePlus, Images, Info, Layers, LockKeyhole, Package, Pencil, Plus, RefreshCw, Save, Search, Share2, Store, Trash2, X, Image } from 'lucide-vue-next'
+import type { Catalogo, CatalogoProducto, FotoGaleria, Usuario, Variante } from '../api.ts'
 import { api, currentUsername, normalizarGaleria } from '../api.ts'
 import AddProductToCatalogModal from '../components/AddProductToCatalogModal.vue'
 import AddComboToCatalogModal from '../components/AddComboToCatalogModal.vue'
@@ -18,6 +18,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'create'): void
   (e: 'edit', catalog: Catalogo): void
+  (e: 'preview', catalogId: number): void
 }>()
 
 const catalogs = ref<Catalogo[]>([])
@@ -33,6 +34,11 @@ const allError = ref('')
 const removingAllId = ref<number | null>(null)
 const allLoaded = ref(false)
 const selectedCatalog = ref<Catalogo | null>(null)
+const infoCatalog = ref<Catalogo | null>(null)
+const infoCatalogLoading = ref(false)
+const infoCatalogError = ref('')
+const infoProductCount = ref(0)
+const infoComboCount = ref(0)
 const catalogProducts = ref<CatalogoProducto[]>([])
 const expandedVariantGroupKeys = ref<string[]>([])
 const productVariants = ref<Record<number, Variante[]>>({})
@@ -46,9 +52,7 @@ const savingItemKey = ref('')
 const draftCatalogGroupOrder = ref<string[]>([])
 const savedCatalogGroupOrder = ref<string[]>([])
 const savingVisibilityId = ref<number | null>(null)
-const showCatalogTags = ref(false)
 const showCatalogGallery = ref(false)
-const showCatalogSocials = ref(false)
 
 const deleteTargetCatalog = ref<Catalogo | null>(null)
 const showDeleteCatalogModal = ref(false)
@@ -56,9 +60,6 @@ const deleteTargetAllCatalog = ref<Catalogo | null>(null)
 const showDeleteAllCatalogModal = ref(false)
 const deleteTargetCatalogItem = ref<CatalogoProducto | null>(null)
 const showDeleteCatalogItemModal = ref(false)
-const socialDraft = ref({ whatsapp: '', instagram: '', facebook: '' })
-const socialSaving = ref(false)
-const socialError = ref('')
 const galleryDraft = ref<FotoGaleria[]>([])
 const galleryError = ref('')
 const gallerySaving = ref(false)
@@ -66,14 +67,8 @@ const galleryUploading = ref(false)
 const cropGalleryVisible = ref(false)
 const pendingGalleryFile = ref<File | null>(null)
 const pendingGalleryIndex = ref<number | null>(null)
-const catalogTags = ref<Etiqueta[]>([])
-const selectedTagIds = ref<number[]>([])
-const catalogTagsLoading = ref(false)
-const catalogTagsSaving = ref(false)
-const catalogTagsError = ref('')
-const requestedTagName = ref('')
-const showTagRequestModal = ref(false)
 const showCatalogBlockedModal = ref(false)
+let catalogInfoRequest = 0
 
 // Logo
 const logoDraft = ref<string | null>(null)
@@ -197,13 +192,40 @@ async function manageCatalogProducts(catalog: Catalogo) {
   productVariants.value = {}
   variantsLoadingByProduct.value = []
   variantsErrorByProduct.value = {}
-  showCatalogTags.value = false
   showCatalogGallery.value = false
   galleryDraft.value = normalizarGaleria(catalog.galeria)
   galleryError.value = ''
   logoDraft.value = catalog.urlLogo || null
   logoError.value = ''
   await loadCatalogProducts(true)
+}
+
+async function openCatalogInfo(catalog: Catalogo) {
+  if (!catalog.id) return
+  const request = ++catalogInfoRequest
+  infoCatalog.value = catalog
+  infoCatalogLoading.value = true
+  infoCatalogError.value = ''
+  infoProductCount.value = 0
+  infoComboCount.value = 0
+  try {
+    const items = await api.catalogoProductos<CatalogoProducto>(catalog.id)
+    if (request !== catalogInfoRequest) return
+    infoProductCount.value = new Set(items.filter((item) => !item.comboId && item.productoId).map((item) => item.productoId)).size
+    infoComboCount.value = new Set(items.filter((item) => item.comboId).map((item) => item.comboId)).size
+  } catch (reason) {
+    if (request !== catalogInfoRequest) return
+    infoCatalogError.value = reason instanceof Error ? reason.message : 'No se pudo cargar el resumen del catálogo.'
+  } finally {
+    if (request === catalogInfoRequest) infoCatalogLoading.value = false
+  }
+}
+
+function closeCatalogInfo() {
+  catalogInfoRequest++
+  infoCatalog.value = null
+  infoCatalogLoading.value = false
+  infoCatalogError.value = ''
 }
 
 function selectGalleryPhoto(event: Event, index: number | null = null) {
@@ -354,163 +376,9 @@ async function toggleProductVariants(group: (typeof catalogProductGroups.value)[
   }
 }
 
-async function openCatalogTags() {
-  const catalog = selectedCatalog.value
-  if (!catalog || !canManageSelectedCatalog.value) return
-  if (showCatalogTags.value) {
-    showCatalogTags.value = false
-    return
-  }
-  showCatalogTags.value = true
-
-  selectedTagIds.value = (catalog.etiquetas || []).flatMap((tag) => {
-    if (typeof tag === 'string') {
-      const found = catalogTags.value.find((item) => item.nombre === tag)
-      return found ? [found.id] : []
-    }
-    return [tag.id]
-  }).slice(0, 2)
-  if (catalogTags.value.length) return
-
-  await loadCatalogTags()
-}
-
-async function loadCatalogTags() {
-  const catalog = selectedCatalog.value
-  if (!catalog) return
-  catalogTagsLoading.value = true
-  catalogTagsError.value = ''
-  try {
-    catalogTags.value = await api.etiquetasTodas<Etiqueta>()
-    selectedTagIds.value = (catalog.etiquetas || []).flatMap((tag) => {
-      if (typeof tag === 'string') {
-        const found = catalogTags.value.find((item) => item.nombre === tag)
-        return found ? [found.id] : []
-      }
-      return [tag.id]
-    }).slice(0, 2)
-  } catch (reason) {
-    catalogTagsError.value = reason instanceof Error ? reason.message : 'No se pudieron cargar las etiquetas.'
-  } finally {
-    catalogTagsLoading.value = false
-  }
-}
-
-function toggleCatalogTag(id: number) {
-  if (selectedTagIds.value.includes(id)) {
-    selectedTagIds.value = selectedTagIds.value.filter((item) => item !== id)
-  } else if (selectedTagIds.value.length < 2) {
-    selectedTagIds.value = [...selectedTagIds.value, id]
-  }
-}
-
-function normalizeSocialValue(value: string, type: 'whatsapp' | 'instagram' | 'facebook') {
-  const trimmed = value.trim()
-  if (!trimmed) return ''
-  if (type === 'whatsapp') {
-    const digits = trimmed.replace(/\D+/g, '')
-    if (digits) return `https://wa.me/${digits}`
-    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed
-    return `https://${trimmed}`
-  }
-  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed
-  return `https://${trimmed}`
-}
-
-function openCatalogSocials() {
-  const catalog = selectedCatalog.value
-  if (!catalog || !canManageSelectedCatalog.value) return
-  socialDraft.value = {
-    whatsapp: catalog.whatsapp || '',
-    instagram: catalog.instagram || '',
-    facebook: catalog.facebook || '',
-  }
-  socialError.value = ''
-  showCatalogSocials.value = true
-}
-
-async function saveCatalogSocials() {
-  const catalog = selectedCatalog.value
-  if (!catalog?.id || !canManageSelectedCatalog.value) return
-  socialSaving.value = true
-  socialError.value = ''
-  try {
-    const payload = {
-      nombre: catalog.nombre,
-      descripcion: catalog.descripcion || '',
-      urlFotoPortada: catalog.urlFotoPortada || null,
-      whatsapp: normalizeSocialValue(socialDraft.value.whatsapp, 'whatsapp'),
-      instagram: normalizeSocialValue(socialDraft.value.instagram, 'instagram'),
-      facebook: normalizeSocialValue(socialDraft.value.facebook, 'facebook'),
-      etiquetaIds: (catalog.etiquetas || []).flatMap((tag) => {
-        if (typeof tag === 'string') {
-          const found = catalogTags.value.find((item) => item.nombre === tag)
-          return found ? [found.id] : []
-        }
-        return [tag.id]
-      }).slice(0, 2),
-    }
-    const updated = props.isAdmin
-      ? await api.updateCatalogoAdmin<Catalogo>(catalog.id, payload)
-      : await api.updateCatalogo<Catalogo>(props.usuarioId, catalog.id, payload)
-    const updateList = (items: Catalogo[]) => items.map((item) => item.id === updated.id ? updated : item)
-    catalogs.value = updateList(catalogs.value)
-    allCatalogs.value = updateList(allCatalogs.value)
-    selectedCatalog.value = updated
-    showCatalogSocials.value = false
-  } catch (reason) {
-    socialError.value = reason instanceof Error ? reason.message : 'No se pudieron guardar las redes sociales.'
-  } finally {
-    socialSaving.value = false
-  }
-}
-
-async function saveCatalogTags() {
-  const catalog = selectedCatalog.value
-  if (!catalog?.id || !canManageSelectedCatalog.value) return
-  catalogTagsSaving.value = true
-  catalogTagsError.value = ''
-  try {
-    const payload = {
-      nombre: catalog.nombre,
-      descripcion: catalog.descripcion || '',
-      urlFotoPortada: catalog.urlFotoPortada || null,
-      whatsapp: catalog.whatsapp ?? null,
-      instagram: catalog.instagram ?? null,
-      facebook: catalog.facebook ?? null,
-      etiquetaIds: selectedTagIds.value,
-    }
-    const updated = props.isAdmin
-      ? await api.updateCatalogoAdmin<Catalogo>(catalog.id, payload)
-      : await api.updateCatalogo<Catalogo>(props.usuarioId, catalog.id, payload)
-    const updateList = (items: Catalogo[]) => items.map((item) => item.id === updated.id ? updated : item)
-    catalogs.value = updateList(catalogs.value)
-    allCatalogs.value = updateList(allCatalogs.value)
-    selectedCatalog.value = updated
-    showCatalogTags.value = false
-  } catch (reason) {
-    catalogTagsError.value = reason instanceof Error ? reason.message : 'No se pudieron guardar las etiquetas.'
-  } finally {
-    catalogTagsSaving.value = false
-  }
-}
-
-function requestCatalogTag() {
-  const tagName = requestedTagName.value.trim()
-  if (!tagName) return
-  const message = `Hola, quisiera solicitar la creación de la etiqueta "${tagName}" para mis catálogos.`
-  window.open(`https://wa.me/5359292460?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer')
-  showTagRequestModal.value = false
-}
-
 function adminContactLink() {
   const message = `Hola, soy el usuario ${currentUsername()} del sitio CatalogoZone, quisiera saber las razones por la que mi catálogo ${selectedCatalog.value?.nombre || ''} ha sido bloqueado`
   return `https://wa.me/5359292460?text=${encodeURIComponent(message)}`
-}
-
-function openTagRequestModal() {
-  requestedTagName.value = ''
-  showTagRequestModal.value = true
 }
 
 async function toggleCatalogVisibility(catalog: Catalogo) {
@@ -657,11 +525,9 @@ function closeCatalogProducts(discardUnsavedOrder = false) {
   variantsLoadingByProduct.value = []
   variantsErrorByProduct.value = {}
   catalogProductsError.value = ''
-  showCatalogTags.value = false
   showCatalogGallery.value = false
   galleryDraft.value = []
   galleryError.value = ''
-  showTagRequestModal.value = false
   showCatalogBlockedModal.value = false
   logoDraft.value = null
   logoError.value = ''
@@ -838,8 +704,6 @@ watch(
           </div>
           <div class="management-header-actions">
             <button v-if="canManageSelectedCatalog" class="header-icon-button visibility-toggle" :class="{ shown: selectedCatalog.visible !== false, blocked: selectedCatalog.bloqueadoPorAdmin && !props.isAdmin }" type="button" :title="selectedCatalog.bloqueadoPorAdmin && !props.isAdmin ? 'Bloqueado por el administrador' : selectedCatalog.visible === false ? 'Mostrar en la página principal' : 'Ocultar de la página principal'" :aria-label="selectedCatalog.bloqueadoPorAdmin && !props.isAdmin ? 'Bloqueado por el administrador. Contactar con administración' : selectedCatalog.visible === false ? 'Mostrar catálogo en la página principal' : 'Ocultar catálogo de la página principal'" :disabled="savingVisibilityId === selectedCatalog.id" @click="toggleCatalogVisibility(selectedCatalog)"><RefreshCw v-if="savingVisibilityId === selectedCatalog.id" class="spin" :size="16" /><LockKeyhole v-else-if="selectedCatalog.bloqueadoPorAdmin && !props.isAdmin" :size="16" /><Eye v-else-if="selectedCatalog.visible === false" :size="16" /><EyeOff v-else :size="16" /></button>
-            <button v-if="canManageSelectedCatalog" class="header-icon-button" :class="{ active: showCatalogTags }" type="button" title="Añadir o editar etiquetas" aria-label="Añadir o editar etiquetas" @click="openCatalogTags"><Tag :size="16" /></button>
-            <button v-if="canManageSelectedCatalog" class="header-icon-button" :class="{ active: showCatalogSocials }" type="button" title="Redes sociales" aria-label="Redes sociales" @click="openCatalogSocials"><Globe2 :size="16" /></button>
             <button v-if="canManageSelectedCatalog" class="header-icon-button" :class="{ active: showCatalogGallery }" type="button" title="Gestionar galería" aria-label="Gestionar galería" @click="showCatalogGallery = !showCatalogGallery"><ImagePlus :size="16" /></button>
             <button v-if="canManageSelectedCatalog" class="header-icon-button" type="button" title="Editar catálogo" aria-label="Editar catálogo" @click="editSelectedCatalog"><Pencil :size="16" /></button>
             <button v-if="canManageSelectedCatalog" class="header-icon-button danger" type="button" title="Eliminar catálogo" aria-label="Eliminar catálogo" :disabled="Boolean(savingItemKey) || removingId === selectedCatalog.id || removingAllId === selectedCatalog.id" @click="deleteSelectedCatalog(selectedCatalog)"><RefreshCw v-if="removingId === selectedCatalog.id || removingAllId === selectedCatalog.id" class="spin" :size="16" /><Trash2 v-else :size="16" /></button>
@@ -848,52 +712,6 @@ watch(
         </header>
 
         <div class="management-content">
-          <section v-if="showCatalogTags" class="catalog-tags-panel" aria-label="Etiquetas del catálogo">
-            <header><div><h3>Etiquetas <span>{{ selectedTagIds.length }}/2</span></h3><p>Elige hasta dos etiquetas para ayudar a encontrar este catálogo.</p></div><button type="button" title="Cerrar etiquetas" aria-label="Cerrar etiquetas" @click="showCatalogTags = false"><X :size="16" /></button></header>
-            <div v-if="catalogTagsLoading" class="tag-loading"><RefreshCw :size="16" class="spin" /> Cargando etiquetas...</div>
-            <p v-if="catalogTagsError" class="catalog-inline-error">{{ catalogTagsError }} <button class="tag-retry" type="button" @click="loadCatalogTags">Reintentar</button></p>
-            <div v-else-if="!catalogTagsLoading && catalogTags.length" class="catalog-tag-picker">
-              <button v-for="tag in catalogTags" :key="tag.id" type="button" :class="{ selected: selectedTagIds.includes(tag.id) }" :aria-pressed="selectedTagIds.includes(tag.id)" :disabled="selectedTagIds.length >= 2 && !selectedTagIds.includes(tag.id)" @click="toggleCatalogTag(tag.id)"><Tag :size="13" />{{ tag.nombre }}</button>
-            </div>
-            <p v-else-if="!catalogTagsLoading" class="tag-loading">No hay etiquetas disponibles.</p>
-            <p class="tag-request-copy">¿No encuentras tu etiqueta? No te preocupes, puedes solicitar la creación de una nueva.</p>
-            <button class="open-tag-request" type="button" @click="openTagRequestModal"><Tag :size="15" /> Solicitar una etiqueta</button>
-            <footer><button class="save-tags-button" type="button" :disabled="catalogTagsSaving || catalogTagsLoading || Boolean(catalogTagsError)" @click="saveCatalogTags"><RefreshCw v-if="catalogTagsSaving" class="spin" :size="15" /><Tag v-else :size="15" />{{ catalogTagsSaving ? 'Guardando...' : 'Guardar etiquetas' }}</button></footer>
-          </section>
-
-          <section v-if="showCatalogSocials" class="catalog-tags-panel" aria-label="Redes sociales del catálogo">
-            <header>
-              <div>
-                <h3>Redes sociales</h3>
-                <p>Agrega tus enlaces para que los clientes puedan contactarte desde la página pública.</p>
-              </div>
-              <button type="button" title="Cerrar redes sociales" aria-label="Cerrar redes sociales" @click="showCatalogSocials = false"><X :size="16" /></button>
-            </header>
-            <p v-if="socialError" class="catalog-inline-error">{{ socialError }}</p>
-            <div class="catalog-social-grid">
-              <label class="catalog-social-field">
-                <span><MessageCircle :size="14" /> WhatsApp</span>
-                <input v-model="socialDraft.whatsapp" type="url" placeholder="https://wa.me/549... o enlace de grupo" />
-              </label>
-              <label class="catalog-social-field">
-                <span><Instagram :size="14" /> Instagram</span>
-                <input v-model="socialDraft.instagram" type="url" placeholder="https://instagram.com/usuario" />
-              </label>
-              <label class="catalog-social-field">
-                <span><Facebook :size="14" /> Facebook</span>
-                <input v-model="socialDraft.facebook" type="url" placeholder="https://facebook.com/usuario" />
-              </label>
-            </div>
-            <footer>
-              <span class="gallery-unsaved-note">Opcional</span>
-              <button class="save-tags-button" type="button" :disabled="socialSaving" @click="saveCatalogSocials">
-                <RefreshCw v-if="socialSaving" class="spin" :size="15" />
-                <Save v-else :size="15" />
-                {{ socialSaving ? 'Guardando...' : 'Guardar redes' }}
-              </button>
-            </footer>
-          </section>
-
           <section v-if="showCatalogGallery" class="catalog-gallery-panel" aria-label="Galería del catálogo">
             <header>
               <div><h3>Galería <span>{{ galleryDraft.length }}/10</span></h3><p>Añade hasta 10 fotos de diseños y productos para mostrar en tu catálogo.</p></div>
@@ -923,21 +741,6 @@ watch(
               </button>
             </footer>
           </section>
-
-          <div v-if="showTagRequestModal" class="catalog-submodal-overlay" @click.self="showTagRequestModal = false" @keydown.esc.stop="showTagRequestModal = false">
-            <section class="catalog-submodal" role="dialog" aria-modal="true" aria-labelledby="tag-request-title">
-              <button class="submodal-close" type="button" aria-label="Cerrar" @click="showTagRequestModal = false"><X :size="18" /></button>
-              <div class="submodal-icon"><Tag :size="22" /></div>
-              <h3 id="tag-request-title">Solicitar una etiqueta</h3>
-              <p>¿No encuentras tu etiqueta? No te preocupes, puedes solicitar la creación de una nueva.</p>
-              <label for="requested-tag-name">Nombre de la etiqueta</label>
-              <input id="requested-tag-name" v-model="requestedTagName" type="text" maxlength="100" placeholder="Escribe la etiqueta que necesitas" />
-              <div class="submodal-actions">
-                <button class="secondary-action" type="button" @click="showTagRequestModal = false">Cancelar</button>
-                <button class="save-tags-button" type="button" :disabled="!requestedTagName.trim()" @click="requestCatalogTag">Continuar por WhatsApp</button>
-              </div>
-            </section>
-          </div>
 
           <div v-if="showCatalogBlockedModal" class="catalog-submodal-overlay" @click.self="showCatalogBlockedModal = false" @keydown.esc.stop="showCatalogBlockedModal = false">
             <section class="catalog-submodal blocked-notice" role="dialog" aria-modal="true" aria-labelledby="catalog-blocked-title">
@@ -972,7 +775,7 @@ watch(
             <section v-for="(group, index) in catalogProductGroups" :key="group.key" class="catalog-product-group">
               <article class="catalog-product-row" :class="{ 'is-hidden': group.main.visible === false }">
                 <div class="item-photo"><img v-if="group.main.urlFoto" :src="group.main.urlFoto" :alt="group.main.nombre" loading="lazy" /><Package v-else :size="25" /></div>
-                <div class="catalog-product-info"><div class="product-title-line"><strong>{{ group.main.nombre }}</strong><span class="visibility-status" :class="{ hidden: group.main.visible === false }">{{ group.main.visible === false ? 'Oculto' : 'Visible' }}</span></div><p>{{ group.main.descripcion || 'Sin descripción disponible.' }}</p><strong v-if="group.main.precioVenta !== undefined" class="product-price">{{ group.main.precioVenta }}</strong></div>
+                <div class="catalog-product-info"><div class="product-title-line"><strong>{{ group.main.nombre }}</strong><span class="visibility-status" :class="{ hidden: group.main.visible === false }">{{ group.main.visible === false ? 'Oculto' : 'Visible' }}</span></div><p>{{ group.main.descripcion || 'Sin descripción disponible.' }}</p><strong v-if="group.main.precioVenta !== undefined" class="product-price">{{ group.main.precioVenta }} {{ group.main.monedaVenta || 'CUP' }}</strong></div>
                 <div v-if="canManageSelectedCatalog" class="item-actions">
                   <div class="order-actions">
                     <button type="button" :aria-label="`Mover ${group.main.nombre} arriba`" title="Mover arriba" :disabled="index === 0 || Boolean(savingItemKey)" @click="moveCatalogItem(index, -1)"><ArrowUp :size="14" /></button>
@@ -1029,7 +832,7 @@ watch(
     </div>
 
     <div v-else class="catalog-grid">
-      <article v-for="catalog in catalogs" :key="catalog.id ?? catalog.nombre" class="catalog-card" role="button" tabindex="0" @click="manageCatalogProducts(catalog)" @keydown.enter.prevent="manageCatalogProducts(catalog)" @keydown.space.prevent="manageCatalogProducts(catalog)">
+      <article v-for="catalog in catalogs" :key="catalog.id ?? catalog.nombre" class="catalog-card">
         <div class="catalog-cover">
           <img v-if="catalog.urlFotoPortada" :src="catalog.urlFotoPortada" :alt="catalog.nombre" />
           <Store v-else :size="38" />
@@ -1038,6 +841,9 @@ watch(
           <h3>{{ catalog.nombre }}</h3>
           <p>{{ catalog.descripcion || 'Sin descripción disponible.' }}</p>
         </div>
+        <button class="catalog-card-open" type="button" :aria-label="`Ver catálogo público ${catalog.nombre}`" @click="catalog.id && emit('preview', catalog.id)" />
+        <button class="catalog-edit-action" type="button" :aria-label="`Editar catálogo ${catalog.nombre}`" title="Editar catálogo" @click.stop="manageCatalogProducts(catalog)"><Pencil :size="17" /></button>
+        <button class="catalog-info-action" type="button" :aria-label="`Ver información de ${catalog.nombre}`" title="Información del catálogo" @click="openCatalogInfo(catalog)"><Info :size="17" /></button>
       </article>
     </div>
     </template>
@@ -1063,6 +869,9 @@ watch(
             <p class="catalog-owner">Propietario: {{ ownerNames.get(catalog.usuarioId ?? -1) || 'Usuario desconocido' }}</p>
             <p>{{ catalog.descripcion || 'Sin descripción disponible.' }}</p>
           </div>
+          <button class="catalog-card-open" type="button" :aria-label="`Ver catálogo público ${catalog.nombre}`" @click="catalog.id && emit('preview', catalog.id)" />
+          <button v-if="props.isAdmin && catalog.usuarioId === props.usuarioId" class="catalog-edit-action" type="button" :aria-label="`Editar catálogo ${catalog.nombre}`" title="Editar catálogo" @click.stop="manageCatalogProducts(catalog)"><Pencil :size="17" /></button>
+          <button v-else-if="props.isAdmin" class="catalog-info-action catalog-info-action-bottom" type="button" :aria-label="`Ver información de ${catalog.nombre}`" title="Información del catálogo" @click.stop="openCatalogInfo(catalog)"><Info :size="17" /></button>
         </article>
       </div>
     </template>
@@ -1122,6 +931,36 @@ watch(
       @confirm="confirmDeleteCatalogItem"
       @cancel="showDeleteCatalogItemModal = false; deleteTargetCatalogItem = null"
     />
+
+    <div v-if="infoCatalog" class="catalog-info-layer" @click.self="closeCatalogInfo" @keydown.esc="closeCatalogInfo">
+      <section class="catalog-info-modal" role="dialog" aria-modal="true" aria-labelledby="catalog-info-title">
+        <header class="catalog-info-heading">
+          <div><p class="eyebrow">Resumen del catálogo</p><h2 id="catalog-info-title">{{ infoCatalog.nombre }}</h2></div>
+          <button class="catalog-info-close" type="button" aria-label="Cerrar información" @click="closeCatalogInfo"><X :size="18" /></button>
+        </header>
+        <div class="catalog-info-status" :class="{ hidden: infoCatalog.visible === false }">
+          <Eye v-if="infoCatalog.visible !== false" :size="17" />
+          <EyeOff v-else :size="17" />
+          {{ infoCatalog.visible === false ? 'No visible' : 'Visible' }}
+        </div>
+        <div class="catalog-info-stats">
+          <div class="catalog-info-stat"><Package :size="18" /><span>Productos</span><strong>{{ infoCatalogLoading ? '…' : infoProductCount }}</strong></div>
+          <div class="catalog-info-stat"><Boxes :size="18" /><span>Combos</span><strong>{{ infoCatalogLoading ? '…' : infoComboCount }}</strong></div>
+          <div class="catalog-info-stat"><Images :size="18" /><span>Fotos en galería</span><strong>{{ normalizarGaleria(infoCatalog.galeria).length }}</strong></div>
+        </div>
+        <div class="catalog-info-social">
+          <Share2 :size="18" />
+          <span>Redes sociales</span>
+          <strong v-if="infoCatalog.whatsapp || infoCatalog.instagram || infoCatalog.facebook">Añadidas</strong>
+          <strong v-else>No añadidas</strong>
+        </div>
+        <p v-if="infoCatalogLoading" class="catalog-info-message"><RefreshCw :size="16" class="spin" /> Cargando productos y combos...</p>
+        <p v-else-if="infoCatalogError" class="catalog-info-error" role="alert">{{ infoCatalogError }}</p>
+        <footer class="catalog-info-footer">
+          <button class="secondary-action" type="button" @click="closeCatalogInfo">Cerrar</button>
+        </footer>
+      </section>
+    </div>
   </section>
 </template>
 
@@ -1143,15 +982,23 @@ h2 { margin: 8px 0 7px; color: #171717; font: 700 clamp(28px, 4vw, 42px) 'Space 
 .empty-catalogs p { max-width: 340px; line-height: 1.5; }
 .error-state { color: #a8584e; }
 .catalog-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
-.catalog-card { overflow: hidden; border: 1px solid #e8e8e8; border-radius: 16px; background: #fff; cursor:pointer; transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease; }
-.catalog-card:hover,.catalog-card:focus-visible { transform:translateY(-2px);border-color:#c65b19;box-shadow:0 12px 28px rgba(198,91,25,0.12);outline:none; }
+.catalog-card { position:relative;overflow: hidden; border: 1px solid #e8e8e8; border-radius: 16px; background: #fff; transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease; }
+.catalog-card:hover,.catalog-card:has(.catalog-card-open:focus-visible) { transform:translateY(-2px);border-color:#c65b19;box-shadow:0 12px 28px rgba(198,91,25,0.12); }
+.catalog-card-open { position:absolute;inset:0;z-index:1;width:100%;height:100%;border:0;background:transparent;cursor:pointer; }
+.catalog-card-open:focus-visible { outline:3px solid #c65b19;outline-offset:-4px; }
+.catalog-edit-action,.catalog-info-action { position:absolute;z-index:2;display:grid;place-items:center;width:36px;height:36px;border:1px solid rgba(255,255,255,.7);border-radius:10px;background:rgba(255,255,255,.94);color:#c65b19;box-shadow:0 4px 14px rgba(0,0,0,.16);cursor:pointer;transition:transform .18s ease,background .18s ease,box-shadow .18s ease,color .18s ease; }
+.catalog-edit-action { right:12px;bottom:12px; }
+.catalog-info-action { top:12px;right:12px; }
+.catalog-info-action-bottom { top:auto;bottom:12px; }
+.catalog-info-action:hover,.catalog-edit-action:hover { transform:translateY(-3px) scale(1.1);background:#c65b19;color:#fff;box-shadow:0 8px 20px rgba(198,91,25,.4); }
+.catalog-info-action:focus-visible,.catalog-edit-action:focus-visible { outline:3px solid #c65b19;outline-offset:2px; }
 .catalog-cover { position: relative; height: 170px; display: grid; place-items: center; overflow: hidden; background: #fff6f0; color: #c65b19; }
 .catalog-cover img { width: 100%; height: 100%; object-fit: cover; }
 .admin-catalog-card { cursor:default; }
 .admin-catalog-card:hover { transform:none; }
-.catalog-visibility-action { position:absolute;top:12px;right:12px;z-index:1;display:grid;place-items:center;width:36px;height:36px;border:1px solid rgba(255,255,255,.65);border-radius:11px;background:rgba(255,255,255,.92);color:#a8584e;box-shadow:0 5px 16px rgba(0,0,0,.18);cursor:pointer;backdrop-filter:blur(5px); }
+.catalog-visibility-action { position:absolute;top:12px;right:12px;z-index:2;display:grid;place-items:center;width:36px;height:36px;border:1px solid rgba(255,255,255,.65);border-radius:11px;background:rgba(255,255,255,.92);color:#a8584e;box-shadow:0 5px 16px rgba(0,0,0,.18);cursor:pointer;backdrop-filter:blur(5px);transition:transform .18s ease,background .18s ease,box-shadow .18s ease,color .18s ease; }
 .catalog-visibility-action.shown { color:#c65b19; }
-.catalog-visibility-action:hover { transform:translateY(-1px);background:#fff; }
+.catalog-visibility-action:hover { transform:translateY(-3px) scale(1.1);background:#c65b19;color:#fff;box-shadow:0 8px 20px rgba(198,91,25,.4); }
 .catalog-visibility-action:disabled { opacity:.55;cursor:wait; }
 .catalog-visibility-status { position:absolute;left:12px;bottom:12px;padding:5px 9px;border-radius:999px;background:#fff6f0;color:#c65b19;font-size:10px;font-weight:800;box-shadow:0 3px 10px rgba(0,0,0,.12); }
 .catalog-visibility-status.hidden { background:#f6e5e1;color:#985149; }
@@ -1161,6 +1008,23 @@ h2 { margin: 8px 0 7px; color: #171717; font: 700 clamp(28px, 4vw, 42px) 'Space 
 .catalog-info { padding: 18px; }
 .catalog-info h3 { margin: 0 0 7px; color: #171717; }
 .catalog-info p { margin: 0; line-height: 1.5; }
+.catalog-info-layer { position:fixed;inset:0;z-index:150;display:grid;place-items:center;overflow-y:auto;padding:18px;background:rgba(0,0,0,.64); }
+.catalog-info-modal { display:grid;gap:18px;width:min(460px,100%);max-height:calc(100dvh - 36px);overflow-y:auto;padding:24px;border:1px solid #e8e8e8;border-radius:14px;background:#fff;box-shadow:0 22px 70px rgba(0,0,0,.22); }
+.catalog-info-heading { display:flex;align-items:flex-start;justify-content:space-between;gap:14px; }
+.catalog-info-heading h2 { margin:6px 0 0;color:#171717;font-size:23px;overflow-wrap:anywhere; }
+.catalog-info-close { display:grid;place-items:center;width:36px;height:36px;flex:0 0 auto;border:0;border-radius:8px;background:#fff6f0;color:#c65b19;cursor:pointer; }
+.catalog-info-status { display:inline-flex;align-items:center;gap:7px;justify-self:start;padding:7px 10px;border-radius:999px;background:#fff6f0;color:#c65b19;font-size:12px;font-weight:800; }
+.catalog-info-status.hidden { background:#f6e5e1;color:#985149; }
+.catalog-info-stats { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px; }
+.catalog-info-stat { display:grid;justify-items:start;gap:7px;min-width:0;padding:13px;border:1px solid #e8e8e8;border-radius:10px;background:#fafafa;color:#c65b19; }
+.catalog-info-stat span { color:#777;font-size:11px;line-height:1.35; }
+.catalog-info-stat strong { color:#171717;font-size:21px; }
+.catalog-info-social { display:flex;align-items:center;gap:9px;padding:13px;border:1px solid #e8e8e8;border-radius:10px;color:#c65b19; }
+.catalog-info-social span { flex:1;color:#555;font-size:13px;font-weight:700; }
+.catalog-info-social strong { color:#171717;font-size:12px; }
+.catalog-info-message { display:flex;align-items:center;gap:8px;margin:0;color:#777;font-size:13px; }
+.catalog-info-error { margin:0;color:#a8584e;font-size:13px; }
+.catalog-info-footer { display:flex;justify-content:flex-end;padding-top:14px;border-top:1px solid #eee; }
 .catalog-tabs { display: flex; gap: 8px; margin: 0 0 20px; border-bottom: 1px solid #e8e8e8; }
 .catalog-tabs button { padding: 10px 14px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: #777; font-weight: 700; }
 .catalog-tabs button.active { border-bottom-color: #c65b19; color: #c65b19; }
@@ -1220,27 +1084,6 @@ h2 { margin: 8px 0 7px; color: #171717; font: 700 clamp(28px, 4vw, 42px) 'Space 
 .management-cover-logo .save-logo-btn:disabled { opacity:.55;cursor:wait; }
 
 .management-content { min-height:calc(100dvh - 220px);padding:24px clamp(12px,2vw,28px) 30px; }
-.catalog-tags-panel { display:grid;gap:13px;margin-bottom:22px;padding:17px 19px;border:1px solid #e8e8e8;border-radius:16px;background:linear-gradient(145deg,#fff,#fafafa);box-shadow:0 6px 18px rgba(0,0,0,.045); }
-.catalog-tags-panel>header,.catalog-tags-panel>footer { display:flex;align-items:center;justify-content:space-between;gap:12px; }
-.catalog-tags-panel h3 { display:flex;align-items:center;gap:8px;margin:0;color:#171717;font-size:16px; }
-.catalog-tags-panel h3 span { display:grid;place-items:center;min-width:23px;height:23px;padding:0 6px;border-radius:999px;background:#f0f0f0;color:#333;font-size:10px; }
-.catalog-tags-panel header p,.tag-request-copy { margin:4px 0 0;color:#777;font-size:12px;line-height:1.45; }
-.catalog-tags-panel header>button { display:grid;place-items:center;width:30px;height:30px;border:0;border-radius:8px;background:#f0f0f0;color:#333;cursor:pointer; }
-.catalog-social-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px; }
-.catalog-social-field { display:grid;gap:7px;color:#333;font-size:12px;font-weight:700; }
-.catalog-social-field span { display:inline-flex;align-items:center;gap:6px; }
-.catalog-social-field input { width:100%;padding:10px 11px;border:1px solid #e8e8e8;border-radius:9px;background:#fff;color:#171717;font:inherit; }
-.catalog-tag-picker { display:flex;flex-wrap:wrap;gap:8px; }
-.catalog-tag-picker>button { display:inline-flex;align-items:center;gap:6px;padding:8px 11px;border:1px solid #e8e8e8;border-radius:999px;background:#fff;color:#777;font:inherit;font-size:12px;cursor:pointer; }
-.catalog-tag-picker>button.selected { border-color:#c65b19;background:#fff6f0;color:#c65b19;font-weight:800; }
-.catalog-tag-picker>button:disabled { opacity:.45;cursor:not-allowed; }
-.tag-loading { display:flex;align-items:center;gap:8px;margin:0;color:#777;font-size:12px; }
-.tag-request-copy { margin:0; }
-.open-tag-request { display:inline-flex;align-items:center;justify-content:center;gap:7px;width:fit-content;padding:9px 12px;border:1px solid #e8e8e8;border-radius:9px;background:#fafafa;color:#c65b19;font-size:12px;font-weight:800;cursor:pointer; }
-.open-tag_request:hover { border_color:#c65b19;background:#fff6f0; }
-.tag-retry { padding:9px 12px;border:0;border-radius:9px;background:#fff6f0;color:#c65b19;font-size:12px;font_weight:800;cursor:pointer; }
-.save-tags-button { display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:9px 13px;border:0;border-radius:9px;background:#c65b19;color:#fff;font-size:12px;font-weight:800;cursor:pointer; }
-.save-tags-button:disabled { opacity:.55;cursor:wait; }
 .catalog-submodal-overlay { position:fixed;inset:0;z-index:125;display:grid;place-items:center;overflow-y:auto;padding:18px;background:rgba(0,0,0,.66);backdrop-filter:blur(4px); }
 .catalog-submodal { position:relative;display:grid;gap:12px;width:min(440px,100%);padding:28px;border:1px solid #e8e8e8;border-radius:20px;background:#fff;box-shadow:0 22px 70px rgba(0,0,0,.28); }
 .catalog-submodal h3 { margin:0;color:#171717;font-size:21px; }
@@ -1346,6 +1189,15 @@ h2 { margin: 8px 0 7px; color: #171717; font: 700 clamp(28px, 4vw, 42px) 'Space 
    ========================================== */
 
 @media (max-width: 680px) {
+  .catalog-info-layer {
+    padding: 12px;
+  }
+
+  .catalog-info-modal {
+    gap: 14px;
+    padding: 18px;
+  }
+
   .catalog-page {
     width: 100%;
     min-width: 0;
@@ -1584,9 +1436,6 @@ h2 { margin: 8px 0 7px; color: #171717; font: 700 clamp(28px, 4vw, 42px) 'Space 
     padding: 16px 12px 24px;
   }
 
-  /* Paneles de etiquetas, redes y galería */
-
-  .catalog-tags-panel,
   .catalog-gallery-panel {
     gap: 12px;
     margin-bottom: 16px;
@@ -1594,53 +1443,19 @@ h2 { margin: 8px 0 7px; color: #171717; font: 700 clamp(28px, 4vw, 42px) 'Space 
     border-radius: 12px;
   }
 
-  .catalog-tags-panel > header,
-  .catalog-tags-panel > footer,
   .catalog-gallery-panel > header,
   .catalog-gallery-panel > footer {
     align-items: flex-start;
     gap: 10px;
   }
 
-  .catalog-tags-panel > footer,
   .catalog-gallery-panel > footer {
     flex-wrap: wrap;
   }
 
-  .catalog-tags-panel header p,
-  .catalog-gallery-panel > header p,
-  .tag-request-copy {
+  .catalog-gallery-panel > header p {
     font-size: 12px;
     line-height: 1.5;
-  }
-
-  .catalog-tag-picker {
-    gap: 7px;
-  }
-
-  .catalog-tag-picker > button {
-    max-width: 100%;
-    padding: 8px 10px;
-    overflow-wrap: anywhere;
-  }
-
-  .open-tag-request {
-    width: 100%;
-  }
-
-  .save-tags-button {
-    max-width: 100%;
-    min-height: 38px;
-  }
-
-  .catalog-social-grid {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 12px;
-  }
-
-  .catalog-social-field input {
-    min-width: 0;
-    font-size: 13px;
   }
 
   .gallery-photo-grid {
@@ -1942,6 +1757,14 @@ h2 { margin: 8px 0 7px; color: #171717; font: 700 clamp(28px, 4vw, 42px) 'Space 
    ========================================== */
 
 @media (max-width: 400px) {
+  .catalog-info-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .catalog-info-stat:last-child {
+    grid-column: 1 / -1;
+  }
+
   .catalog-grid {
     gap: 8px;
   }
