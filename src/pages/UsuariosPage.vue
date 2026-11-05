@@ -23,12 +23,12 @@ const deleteTargetUser = ref<Usuario | null>(null)
 const showDeleteUserModal = ref(false)
 const deleteTargetCatalog = ref<{ user: Usuario; catalog: Catalogo } | null>(null)
 const showDeleteCatalogModal = ref(false)
-const form = ref<UserAdminForm>({ username: '', nombre: '', wapp: '', password: '', rol: 'USER' })
+const form = ref<UserAdminForm>({ username: '', nombre: '', gmail: '', wapp: '', password: '', rol: 'USER' })
 
 const filteredUsers = computed(() => {
   const query = search.value.trim().toLocaleLowerCase()
   if (!query) return users.value
-  return users.value.filter(user => [user.username, user.wapp, user.nombre].some(value => value?.toLocaleLowerCase().includes(query)))
+  return users.value.filter(user => [user.username, user.nombre, user.gmail, user.email, user.correo, user.wapp].some(value => value?.toLocaleLowerCase().includes(query)))
 })
 
 async function load() {
@@ -41,21 +41,21 @@ async function load() {
 
 function openCreate() {
   editingId.value = null
-  form.value = { username: '', nombre: '', wapp: '', password: '', rol: 'USER' }
+  form.value = { username: '', nombre: '', gmail: '', wapp: '', password: '', rol: 'USER' }
   error.value = ''
   showModal.value = true
 }
 
 function openEdit(user: Usuario) {
   editingId.value = user.id ?? null
-  form.value = { username: user.username, nombre: user.nombre, wapp: user.wapp, password: '', rol: user.rol }
+  form.value = { username: user.username, nombre: user.nombre, gmail: user.gmail || user.email || user.correo || '', wapp: user.wapp, password: '', rol: user.rol }
   error.value = ''
   showModal.value = true
 }
 
 async function save(userForm: UserAdminForm) {
-  if (!userForm.username.trim() || !userForm.nombre.trim() || !userForm.wapp.trim() || (!editingId.value && !userForm.password.trim())) {
-    error.value = 'Username, nombre, WhatsApp y contraseña son obligatorios al crear.'
+  if (!userForm.username.trim() || !userForm.nombre.trim() || !userForm.gmail.trim() || !userForm.wapp.trim() || (!editingId.value && !userForm.password.trim())) {
+    error.value = 'Username, nombre, Gmail y WhatsApp son obligatorios; también la contraseña al crear.'
     return
   }
   if (!isValidPhoneNumber(userForm.wapp)) {
@@ -65,7 +65,7 @@ async function save(userForm: UserAdminForm) {
   saving.value = true
   error.value = ''
   try {
-    const payload = { username: userForm.username.trim(), nombre: userForm.nombre.trim(), wapp: userForm.wapp.trim(), password: userForm.password || undefined, rol: userForm.rol }
+    const payload = { username: userForm.username.trim(), nombre: userForm.nombre.trim(), gmail: userForm.gmail.trim(), wapp: userForm.wapp.trim(), password: userForm.password || undefined, rol: userForm.rol }
     if (editingId.value) await api.update('usuarios/admin', editingId.value, payload)
     else await api.create('usuarios/admin', payload)
     showModal.value = false
@@ -147,16 +147,17 @@ onMounted(load)
 
 <template>
   <section class="users-page"><div class="heading"><div><p class="eyebrow">Administración</p><h2>Usuarios</h2><p class="muted">Gestiona las cuentas y sus permisos de acceso.</p></div><button class="primary" type="button" @click="openCreate"><Plus :size="17" /> Crear usuario</button></div>
-    <div class="toolbar"><div class="search"><Search :size="17" /><input v-model="search" type="search" placeholder="Filtrar por username o WhatsApp" /></div><button class="secondary" type="button" @click="load"><RefreshCw :size="16" /> Actualizar</button></div>
+    <div class="toolbar"><div class="search"><Search :size="17" /><input v-model="search" type="search" placeholder="Filtrar por username, Gmail o WhatsApp" /></div><button class="secondary" type="button" @click="load"><RefreshCw :size="16" /> Actualizar</button></div>
     <p v-if="error && !showModal" class="error">{{ error }}</p>
     <div v-if="loading" class="state"><RefreshCw :size="24" class="spin" /> Cargando usuarios...</div>
     <div v-else-if="!filteredUsers.length" class="state"><UserRound :size="30" /><p>{{ search ? 'No hay usuarios que coincidan con el filtro.' : 'Aún no hay usuarios.' }}</p></div>
     <div v-else class="table-wrap">
       <table>
-        <thead><tr><th>Nombre</th><th>WhatsApp</th><th>Acciones</th></tr></thead>
+        <thead><tr><th>Nombre</th><th>Gmail</th><th>WhatsApp</th><th>Acciones</th></tr></thead>
         <tbody>
           <tr v-for="user in filteredUsers" :key="user.id">
             <td>{{ user.nombre }}</td>
+            <td>{{ user.gmail || user.email || user.correo || '—' }}</td>
             <td>{{ user.wapp }}</td>
             <td class="actions">
               <button type="button" title="Ver información del usuario" :aria-label="`Ver información de ${user.nombre}`" @click="openInfo(user)"><Eye :size="16" /><span>Ver info</span></button>
