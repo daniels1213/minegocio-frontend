@@ -7,6 +7,7 @@ import { isValidPhoneNumber } from '../phone.ts'
 export interface UserAdminForm {
   username: string
   nombre: string
+  gmail: string
   wapp: string
   password: string
   rol: 'USER' | 'ADMIN'
@@ -36,6 +37,7 @@ function submit() {
       <div class="fields">
         <label>Username<input v-model="form.username" type="text" autocomplete="off" required /></label>
         <label>Nombre<input v-model="form.nombre" type="text" autocomplete="name" required /></label>
+        <label>Gmail<input v-model="form.gmail" type="email" autocomplete="email" placeholder="tu@gmail.com" required /></label>
         <label>WhatsApp<PhoneInput v-model="form.wapp" required label="WhatsApp" /></label>
         <label>Contraseña<input v-model="form.password" type="password" autocomplete="new-password" :required="!props.editing" :placeholder="props.editing ? 'Dejar vacío para conservarla' : ''" /></label>
         <label>Rol<select v-model="form.rol"><option value="USER">USER</option><option value="ADMIN">ADMIN</option></select></label>
