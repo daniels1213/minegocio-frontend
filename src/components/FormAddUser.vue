@@ -203,6 +203,7 @@ function solicitarPorContacto() {
 
 .register-card {
   width: min(100%, 520px);
+  min-width: 0;
 }
 
 .register-fields {
@@ -213,7 +214,7 @@ function solicitarPorContacto() {
 }
 
 .col-span-2 {
-  grid-column: span 2;
+  grid-column: 1 / -1;
 }
 
 .field {
@@ -303,22 +304,38 @@ function solicitarPorContacto() {
 }
 
 @media (max-width: 560px) {
+  .admin-overlay {
+    place-items: start center;
+    padding: 12px;
+  }
+
   .login-card {
-    padding: 24px 20px;
+    width: 100%;
+    max-height: calc(100dvh - 24px);
+    margin-block: auto;
+    padding: 20px 16px;
   }
 
   .register-fields {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .register-fields .field {
     margin-bottom: 11px;
   }
+
+  .login-card h2 {
+    font-size: 24px;
+  }
 }
 
 @media (max-height: 520px) {
+  .admin-overlay {
+    place-items: start center;
+  }
+
   .login-card {
-    padding: 16px 20px;
+    padding: 16px;
   }
 
   .login-card>p {

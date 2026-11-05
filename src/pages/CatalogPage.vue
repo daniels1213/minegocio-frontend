@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { Search, Package, Store, Shield, Tag, ChevronLeft, ChevronRight, Sparkles, ArrowRight, X, Mail, MessageCircle } from 'lucide-vue-next'
+import { Search, Package, Store, Shield, Tag, ChevronLeft, ChevronRight, Sparkles, ArrowRight, X, Mail, MessageCircle, Check } from 'lucide-vue-next'
 import LoginModal from '../components/LoginModal.vue'
 import FormAddUser from '../components/FormAddUser.vue'
 import { api, hasCredentials, setCredentials, type Catalogo, type Etiqueta, type Usuario } from '../api.ts'
@@ -20,6 +20,8 @@ const labelsError = ref('')
 const search = ref('')
 const searchOpen = ref(false)
 const selectedTags = ref<string[]>([])
+const draftSelectedTags = ref<string[]>([])
+const showTagFilterModal = ref(false)
 const loading = ref(false)
 const error = ref('')
 
@@ -108,19 +110,34 @@ const filteredCatalogs = computed(() => {
   })
 })
 
-function toggleTag(tag: string) {
-  if (selectedTags.value.includes(tag)) {
-    selectedTags.value = selectedTags.value.filter((selectedTag) => selectedTag !== tag)
+function openTagFilter() {
+  draftSelectedTags.value = [...selectedTags.value]
+  showTagFilterModal.value = true
+}
+
+function closeTagFilter() {
+  showTagFilterModal.value = false
+}
+
+function toggleDraftTag(tag: string) {
+  if (draftSelectedTags.value.includes(tag)) {
+    draftSelectedTags.value = draftSelectedTags.value.filter((selectedTag) => selectedTag !== tag)
     return
   }
 
-  if (selectedTags.value.length >= 2) return
-  selectedTags.value.push(tag)
+  if (draftSelectedTags.value.length >= 2) return
+  draftSelectedTags.value.push(tag)
+}
+
+function applyTagFilter() {
+  selectedTags.value = [...draftSelectedTags.value]
+  closeTagFilter()
 }
 
 function clearFilters() {
   search.value = ''
   selectedTags.value = []
+  draftSelectedTags.value = []
 }
 
 function toggleSearch() {
@@ -400,11 +417,11 @@ onUnmounted(() => {
       <div class="catalog-toolbar flex flex-col items-start gap-2 mb-5">
 
         <div class="catalog-heading">
-          <div class="flex space-x-2">
-            <Store class="w-8 h-7 text-[#f3a181] my-auto mt-7" />
+          <div class="catalog-title-row flex items-center space-x-2">
+            <Store class="w-8 h-7 text-[#f3a181]" />
             <h2 id="catalogos-titulo"
               class="catalog-title text-3xl sm:text-4xl font-900 tracking-[-0.03em] text-[#17182d]">Catálogos</h2>
-            <div class="catalog-search-control mt-5" :class="{ 'is-open': searchOpen }">
+            <div class="catalog-search-control" :class="{ 'is-open': searchOpen }">
               <button type="button"
                 class="w-10 h-10 rounded-full !hover:bg-red !shadow-md !bg-[#f3a181] text-white border-none"
                 :aria-label="searchOpen ? 'Ocultar búsqueda' : 'Mostrar búsqueda'" :aria-expanded="searchOpen"
@@ -423,23 +440,21 @@ onUnmounted(() => {
         </div>
 
         <section class="catalog-tag-filter" aria-label="Filtro por etiquetas">
-          <div class="catalog-tag-heading">
-            <div class="catalog-tag-label">
-              <Tag :size="16" /><span>Filtrar por etiquetas</span>
-            </div>
-            <span class="catalog-tag-hint">Selecciona hasta 2</span>
+          <button
+            type="button"
+            class="open-tag-filter"
+            :aria-expanded="showTagFilterModal"
+            aria-haspopup="dialog"
+            @click="openTagFilter"
+          >
+            <Tag :size="17" />
+            <span>Filtrar por etiquetas</span>
+            <span v-if="selectedTags.length" class="tag-selection-count">{{ selectedTags.length }}</span>
+            <span v-else class="tag-filter-hint">Opcional</span>
+          </button>
+          <div v-if="selectedTags.length" class="applied-tags" aria-label="Etiquetas seleccionadas">
+            <span v-for="tag in selectedTags" :key="tag" class="applied-tag">{{ tag }}</span>
           </div>
-          <div v-if="availableTags.length" class="catalog-tag-scroll" aria-label="Etiquetas disponibles">
-            <div class="catalog-tag-list">
-              <button v-for="tag in availableTags" :key="tag" type="button" class="catalog-tag-option"
-                :class="{ selected: selectedTags.includes(tag) }" :aria-pressed="selectedTags.includes(tag)"
-                :disabled="selectedTags.length >= 2 && !selectedTags.includes(tag)" @click="toggleTag(tag)">
-                {{ tag }}
-              </button>
-            </div>
-          </div>
-          <p v-else-if="labelsError" class="catalog-tag-message">{{ labelsError }}</p>
-          <p v-else class="catalog-tag-message">No hay etiquetas disponibles.</p>
         </section>
 
       </div>
@@ -589,6 +604,57 @@ onUnmounted(() => {
 
     <!-- REGISTRO -->
     <FormAddUser :visible="showFormAddModal" :error="formaddError" @close="closeAddUser" />
+
+    <div v-if="showTagFilterModal" class="tag-modal-layer" @click.self="closeTagFilter" @keydown.esc.stop="closeTagFilter">
+      <section class="tag-modal" role="dialog" aria-modal="true" aria-labelledby="tag-modal-title">
+        <header class="tag-modal-header">
+          <div class="tag-modal-title-wrap">
+            <span class="tag-modal-icon"><Tag :size="19" /></span>
+            <div>
+              <p class="tag-modal-eyebrow">Descubre catálogos</p>
+              <h2 id="tag-modal-title">Filtrar por etiquetas</h2>
+            </div>
+          </div>
+          <button type="button" class="tag-modal-close" aria-label="Cerrar" @click="closeTagFilter">
+            <X :size="19" />
+          </button>
+        </header>
+
+        <div class="tag-modal-content">
+          <div class="tag-modal-instructions">
+            <p>Selecciona hasta 2 etiquetas para encontrar catálogos relacionados.</p>
+            <span>{{ draftSelectedTags.length }} de 2 seleccionadas</span>
+          </div>
+          <div v-if="availableTags.length" class="tag-choice-grid">
+            <button
+              v-for="tag in availableTags"
+              :key="tag"
+              type="button"
+              class="tag-choice"
+              :class="{ selected: draftSelectedTags.includes(tag) }"
+              :aria-pressed="draftSelectedTags.includes(tag)"
+              :disabled="draftSelectedTags.length >= 2 && !draftSelectedTags.includes(tag)"
+              @click="toggleDraftTag(tag)"
+            >
+              <span class="tag-choice-check"><Check v-if="draftSelectedTags.includes(tag)" :size="14" /></span>
+              <span class="tag-choice-name">{{ tag }}</span>
+            </button>
+          </div>
+          <p v-else-if="labelsError" class="tag-modal-empty">{{ labelsError }}</p>
+          <p v-else class="tag-modal-empty">No hay etiquetas disponibles.</p>
+        </div>
+
+        <footer class="tag-modal-actions">
+          <button type="button" class="tag-reset-button" :disabled="!draftSelectedTags.length" @click="draftSelectedTags = []">
+            Limpiar selección
+          </button>
+          <div class="tag-modal-action-group">
+            <button type="button" class="tag-cancel-button" @click="closeTagFilter">Cancelar</button>
+            <button type="button" class="tag-apply-button" @click="applyTagFilter">Aplicar filtros</button>
+          </div>
+        </footer>
+      </section>
+    </div>
 
   </div>
 </template>
@@ -1018,92 +1084,307 @@ onUnmounted(() => {
 }
 
 .catalog-tag-filter {
-  display: flex;
-  width: 100%;
-  min-width: 0;
-  flex: 1 1 auto;
-  align-items: center;
-  gap: 12px;
-  margin: 0;
-}
-
-.catalog-tag-heading {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
+  display: grid;
+  justify-items: start;
   gap: 8px;
+  width: fit-content;
+  max-width: 100%;
+  min-width: 0;
 }
 
-.catalog-tag-label {
+.open-tag-filter {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  color: #626262;
+  justify-content: center;
+  gap: 9px;
+  min-height: 42px;
+  padding: 0 14px;
+  border: 1px solid #e6c6b1;
+  border-radius: 10px;
+  background: #fff6f0;
+  color: #8f3e13;
   font-size: 13px;
   font-weight: 800;
+  transition: background .18s ease, border-color .18s ease, transform .18s ease;
 }
 
-.catalog-tag-label svg {
+.open-tag-filter:hover {
+  transform: translateY(-1px);
+  border-color: #c65b19;
+  background: #f8e4d5;
+}
+
+.open-tag-filter svg {
   color: #c65b19;
 }
 
-.catalog-tag-hint {
+.tag-selection-count {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 50%;
+  background: #c65b19;
+  color: #171717;
+  font-size: 11px;
+}
+
+.tag-filter-hint {
   color: #777;
   font-size: 11px;
-  white-space: nowrap;
+  font-weight: 600;
 }
 
-.catalog-tag-scroll {
-  min-width: 0;
-  flex: 1 1 auto;
-  overflow-x: auto;
-  overscroll-behavior-inline: contain;
-  scrollbar-width: thin;
-  scrollbar-color: #c9c9c9 transparent;
-}
-
-.catalog-tag-list {
+.applied-tags {
   display: flex;
-  width: max-content;
-  min-width: 100%;
-  gap: 8px;
-  padding: 1px 1px 7px;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
-.catalog-tag-option {
-  flex: 0 0 auto;
-  padding: 8px 14px;
-  border: 1px solid #dedede;
+.applied-tag {
+  max-width: 100%;
+  overflow: hidden;
+  padding: 5px 9px;
   border-radius: 999px;
-  background: #fff;
-  color: #454545;
-  font-size: 12px;
-  font-weight: 800;
+  background: #171717;
+  color: #fff6f0;
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
   white-space: nowrap;
-  transition: background .18s ease, border-color .18s ease, color .18s ease, opacity .18s ease;
 }
 
-.catalog-tag-option:hover:not(:disabled) {
+.tag-modal-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  padding: 20px;
+  background: rgba(18, 15, 13, .68);
+  backdrop-filter: blur(4px);
+}
+
+.tag-modal {
+  display: flex;
+  flex-direction: column;
+  width: min(600px, 100%);
+  max-height: min(680px, calc(100dvh - 40px));
+  overflow: hidden;
+  border: 1px solid #e8d2c2;
+  border-radius: 16px;
+  background: #fffaf6;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .32);
+}
+
+.tag-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 22px;
+  border-bottom: 1px solid #eadbd0;
+  background: linear-gradient(110deg, #fff0e4, #fffaf6);
+}
+
+.tag-modal-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.tag-modal-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  place-items: center;
+  border-radius: 12px;
+  background: #c65b19;
+  color: #171717;
+}
+
+.tag-modal-eyebrow {
+  margin: 0 0 3px;
+  color: #a34716;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.tag-modal-header h2 {
+  margin: 0;
+  color: #171717;
+  font-size: 20px;
+}
+
+.tag-modal-close {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  place-items: center;
+  border: 1px solid #e8d2c2;
+  border-radius: 9px;
+  background: #fff;
+  color: #6b5142;
+}
+
+.tag-modal-close:hover {
+  border-color: #c65b19;
+  background: #fff0e4;
+  color: #8f3e13;
+}
+
+.tag-modal-content {
+  overflow-y: auto;
+  padding: 20px 22px;
+}
+
+.tag-modal-instructions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.tag-modal-instructions p {
+  color: #626262;
+  font-size: 13px;
+}
+
+.tag-modal-instructions span {
+  flex: 0 0 auto;
+  color: #8f3e13;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.tag-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.tag-choice {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  min-height: 48px;
+  padding: 9px 11px;
+  border: 1px solid #e8d2c2;
+  border-radius: 10px;
+  background: #fff;
+  color: #333;
+  text-align: left;
+  transition: border-color .16s ease, background .16s ease, opacity .16s ease;
+}
+
+.tag-choice:hover:not(:disabled) {
   border-color: #c65b19;
   background: #fff6f0;
 }
 
-.catalog-tag-option.selected {
+.tag-choice.selected {
   border-color: #c65b19;
-  background: #c65b19;
-  color: #171717;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, .12);
+  background: #f8e4d5;
+  color: #5c2a0d;
 }
 
-.catalog-tag-option:disabled {
+.tag-choice:disabled {
   cursor: not-allowed;
   opacity: .48;
 }
 
-.catalog-tag-message {
-  margin: 0;
-  color: #777;
+.tag-choice-check {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  place-items: center;
+  border: 1px solid #d5c7bd;
+  border-radius: 6px;
+  background: #fff;
+  color: #171717;
+}
+
+.tag-choice.selected .tag-choice-check {
+  border-color: #c65b19;
+  background: #c65b19;
+}
+
+.tag-choice-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-size: 12px;
+  font-weight: 700;
+}
+
+.tag-modal-empty {
+  padding: 24px 12px;
+  border: 1px dashed #d9c8bb;
+  border-radius: 10px;
+  color: #777;
+  font-size: 13px;
+  text-align: center;
+}
+
+.tag-modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 22px;
+  border-top: 1px solid #eadbd0;
+  background: #fff;
+}
+
+.tag-modal-action-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tag-reset-button,
+.tag-cancel-button,
+.tag-apply-button {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.tag-reset-button {
+  background: transparent;
+  color: #8f3e13;
+}
+
+.tag-reset-button:disabled {
+  color: #aaa;
+  cursor: not-allowed;
+}
+
+.tag-cancel-button {
+  border-color: #dedede;
+  background: #fff;
+  color: #454545;
+}
+
+.tag-apply-button {
+  background: #171717;
+  color: #fff;
+}
+
+.tag-apply-button:hover {
+  background: #c65b19;
+  color: #171717;
 }
 
 .hero-content {
@@ -1188,25 +1469,95 @@ onUnmounted(() => {
     margin-bottom: 14px;
   }
 
-  .catalog-tag-filter {
+  .tag-modal-layer {
+    align-items: end;
+    padding: 12px;
+  }
+
+  .tag-modal {
     width: 100%;
-    gap: 10px;
+    max-height: min(78dvh, 620px);
+    border-radius: 16px 16px 12px 12px;
   }
 
-  .catalog-tag-heading {
-    gap: 6px;
+  .tag-modal-header,
+  .tag-modal-content {
+    padding-right: 16px;
+    padding-left: 16px;
   }
 
-  .catalog-tag-label {
-    font-size: 12px;
+  .tag-modal-header {
+    padding-top: 15px;
+    padding-bottom: 15px;
   }
 
-  .catalog-tag-hint {
-    font-size: 10px;
+  .tag-modal-content {
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
+
+  .tag-choice-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .tag-choice {
+    min-height: 46px;
+    padding: 8px;
+  }
+
+  .tag-modal-actions {
+    flex-wrap: wrap;
+    padding: 12px 16px;
+  }
+
+  .tag-modal-action-group {
+    flex: 1;
+    justify-content: flex-end;
   }
 
   .catalog-search-input {
-    width: min(180px, calc(92vw - 230px));
+    width: auto;
+    flex: 1 1 0;
+  }
+
+  .catalog-title-row {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .catalog-search-control.is-open {
+    width: 100%;
+    flex: 1 0 100%;
+    margin-left: 0;
+  }
+
+  .catalog-search-control.is-open .catalog-search-input {
+    min-width: 0;
+  }
+
+  @media (max-width: 380px) {
+    .tag-modal-instructions {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    .tag-modal-actions {
+      align-items: stretch;
+      flex-direction: column-reverse;
+    }
+
+    .tag-reset-button,
+    .tag-cancel-button,
+    .tag-apply-button {
+      flex: 1;
+      padding-right: 10px;
+      padding-left: 10px;
+    }
+
+    .tag-modal-action-group {
+      width: 100%;
+    }
   }
 
   .catalog-title {

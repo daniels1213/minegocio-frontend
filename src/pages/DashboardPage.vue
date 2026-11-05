@@ -1195,8 +1195,34 @@ function handlePopState() {
 	}
 
 	.topbar {
+		margin-right: -16px;
+		margin-left: -16px;
+		padding-right: 16px;
+		padding-left: 16px;
 		min-height: 76px;
 		gap: 10px;
+		border-bottom-color: #363636;
+		background: #171717;
+		color: #fff;
+	}
+
+	.topbar .breadcrumb,
+	.topbar h1 {
+		color: #fff;
+	}
+
+	.top-profile:hover {
+		background: #303030;
+	}
+
+	.mobile-menu {
+		border-color: #454545;
+		background: #292929;
+		color: #fff;
+	}
+
+	.mobile-menu:hover {
+		background: #383838;
 	}
 
 	.mobile-menu {
@@ -1366,6 +1392,10 @@ function handlePopState() {
 	}
 
 	.topbar {
+		margin-right: -12px;
+		margin-left: -12px;
+		padding-right: 12px;
+		padding-left: 12px;
 		gap: 8px;
 	}
 
