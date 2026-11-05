@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { LogOut, Package } from 'lucide-vue-next'
+import { LogOut } from 'lucide-vue-next'
 import type { Component } from 'vue'
+import brandLogoUrl from '../assets/Logo.png?url'
 
 type View = 'dashboard' | 'catalogo' | 'nuevo-catalogo' | 'inventario' | 'combos' | 'pedidos' | 'clientes' | 'proveedores' | 'usuarios' | 'etiquetas'
 
@@ -22,8 +23,8 @@ const emit = defineEmits<{
 
 <template>
   <aside class="sidebar" :class="{ 'is-open': props.mobileOpen, 'is-admin': props.isSuperadmin }">
-    <div class="brand space-x-3">
-      <span class="brand-mark"><Package :size="20" /></span>
+    <div class="brand">
+      <span class="brand-mark"><img :src="brandLogoUrl" alt="" /></span>
       <span>CatalogoZone</span>
     </div>
 
@@ -71,7 +72,7 @@ const emit = defineEmits<{
 .brand {
   display: flex;
   align-items: center;
-  gap: 0;
+  gap: 10px;
   font-family: 'Space Grotesk', sans-serif;
   font-weight: 700;
   letter-spacing: -0.5px;
@@ -79,13 +80,19 @@ const emit = defineEmits<{
   color: var(--sidebar-text);
 }
 .brand-mark {
-  width: 36px;
-  height: 36px;
-  border-radius: 11px;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
   display: grid;
   place-items: center;
-  background: var(--accent);
-  color: var(--sidebar-active-text);
+  background: transparent;
+}
+.brand-mark img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, .35));
 }
 .nav-item {
   width: 100%;
@@ -177,8 +184,9 @@ const emit = defineEmits<{
   font-size: 17px;
 }
 .sidebar.is-admin .brand-mark {
-  width: 32px;
-  height: 32px;
+  width: 38px;
+  height: 38px;
+  flex-basis: 38px;
 }
 .sidebar.is-admin nav {
   gap: 2px;
@@ -205,39 +213,73 @@ const emit = defineEmits<{
     transform: translateX(-105%);
     z-index: 30;
     transition: transform 0.2s ease;
-    width: min(calc(100vw - 40px), 264px);
+    width: min(220px, calc(100vw - 48px));
     flex-basis: auto;
     height: 100dvh;
     min-height: 100dvh;
     max-height: 100dvh;
-    padding: max(20px, env(safe-area-inset-top)) 16px max(20px, env(safe-area-inset-bottom));
+    gap: 20px;
+    padding: max(20px, env(safe-area-inset-top)) 14px max(20px, env(safe-area-inset-bottom));
     box-shadow: 14px 0 32px rgba(0, 0, 0, .2);
   }
+
+  .sidebar nav {
+    min-height: 0;
+    overflow-y: auto;
+    gap: 8px;
+  }
+
+  .sidebar-bottom {
+    margin-top: auto;
+  }
+
   .sidebar.is-open {
     transform: translateX(0);
+  }
+
+  .sidebar.is-admin {
+    gap: 16px;
+    padding: max(16px, env(safe-area-inset-top)) 12px max(16px, env(safe-area-inset-bottom));
+  }
+
+  .sidebar.is-admin nav {
+    gap: 7px;
+  }
+
+  .sidebar .nav-item {
+    min-height: 48px;
+    padding: 12px 10px;
+    font-size: 15px;
+  }
+
+  .sidebar.is-admin .nav-item {
+    min-height: 46px;
+    padding: 11px 9px;
+    font-size: 14px;
   }
 }
 
 @media (max-width: 420px) {
   .sidebar {
-    width: calc(100vw - 32px);
+    width: min(210px, calc(100vw - 40px));
     padding-left: 14px;
     padding-right: 14px;
   }
   .brand {
-    font-size: 17px;
+    font-size: 18px;
   }
   .nav-item {
-    padding: 12px 11px;
+    gap: 10px;
+    padding: 12px 9px;
   }
   .sidebar.is-admin {
-    gap: 12px;
-    padding-top: max(14px, env(safe-area-inset-top));
-    padding-bottom: max(14px, env(safe-area-inset-bottom));
+    gap: 16px;
+    padding-top: max(16px, env(safe-area-inset-top));
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
   }
   .sidebar.is-admin .nav-item {
-    min-height: 40px;
-    padding: 8px 10px;
+    min-height: 46px;
+    padding: 11px 9px;
   }
 }
 </style>
