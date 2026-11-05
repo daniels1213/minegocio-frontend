@@ -7,6 +7,7 @@ import { hasCredentials } from './api'
 
 const isAuthenticated = ref(hasCredentials())
 const currentPath = ref(window.location.pathname)
+const isPublicFallback = ref(false)
 const isCatalogRoute = computed(() => /^\/catalogoCont\/\d+\/?$/.test(currentPath.value))
 const legalPage = computed(() => {
   if (currentPath.value === '/terminos-de-uso') return 'terms'
@@ -14,17 +15,47 @@ const legalPage = computed(() => {
   return null
 })
 
+const appPaths = new Set([
+  '/',
+  '/dashboard',
+  '/mis-catalogos',
+  '/mis-catalogos/nuevo',
+  '/inventario',
+  '/combos',
+  '/pedidos',
+  '/clientes',
+  '/proveedores',
+  '/usuarios',
+  '/etiquetas',
+  '/terminos-de-uso',
+  '/politica-de-privacidad',
+])
+
 function syncPath() {
-  currentPath.value = window.location.pathname
+  const path = window.location.pathname
+  const isKnownPath = appPaths.has(path) || /^\/catalogoCont\/\d+\/?$/.test(path)
+
+  if (!isKnownPath) {
+    window.history.replaceState({}, '', '/')
+    currentPath.value = '/'
+    isPublicFallback.value = true
+    return
+  }
+
+  currentPath.value = path
+  isPublicFallback.value = false
 }
 
 function showDashboard() {
   isAuthenticated.value = true
+  isPublicFallback.value = false
 }
 
 function showCatalog() {
   isAuthenticated.value = false
 }
+
+syncPath()
 
 onMounted(() => window.addEventListener('popstate', syncPath))
 onUnmounted(() => window.removeEventListener('popstate', syncPath))
@@ -37,7 +68,7 @@ onUnmounted(() => window.removeEventListener('popstate', syncPath))
   />
 
   <CatalogPage
-    v-else-if="!isAuthenticated || isCatalogRoute"
+    v-else-if="!isAuthenticated || isCatalogRoute || isPublicFallback"
     @authenticated="showDashboard"
   />
 
