@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { Eye, ImagePlus, LoaderCircle, PackagePlus, Pencil, Plus, Trash2, X } from 'lucide-vue-next'
-import { api, type Moneda, type Producto, type Variante } from '../api.ts'
+import { api, type Producto, type Variante } from '../api.ts'
 import { uploadCloudinaryImage } from '../cloudinary.ts'
 import ImageCropModal from './ImageCropModal.vue'
 import DeleteConfirmModal from './DeleteConfirmModal.vue'
@@ -31,8 +31,6 @@ const form = reactive({
   nombre: '',
   existencia: 0,
   urlFoto: '',
-  precioVenta: 0,
-  monedaVenta: 'CUP' as Moneda,
 })
 
 async function loadVariants(productId: number) {
@@ -53,8 +51,6 @@ watch(() => props.product, (product) => {
   form.nombre = ''
   form.existencia = 0
   form.urlFoto = ''
-  form.precioVenta = props.product?.precioVenta || 0
-  form.monedaVenta = props.product?.monedaVenta || 'CUP'
   editingVariant.value = null
   showAddModal.value = false
   if (product?.id) void loadVariants(product.id)
@@ -74,8 +70,6 @@ function openEditModal(variant: Variante) {
   form.nombre = variant.nombre
   form.existencia = variant.existencia
   form.urlFoto = variant.urlFoto || ''
-  form.precioVenta = variant.precio
-  form.monedaVenta = variant.monedaVenta || 'CUP'
   error.value = ''
   showAddModal.value = true
 }
@@ -105,8 +99,12 @@ async function uploadImage(file: File) {
 
 async function saveVariant() {
   if (!props.product?.id) return
-  if (form.precioVenta < 0) {
-    error.value = 'El precio de venta no puede ser negativo.'
+  if (!form.nombre.trim()) {
+    error.value = 'El nombre de la variante es obligatorio.'
+    return
+  }
+  if (form.existencia < 0) {
+    error.value = 'El stock no puede ser negativo.'
     return
   }
   saving.value = true
@@ -116,17 +114,14 @@ async function saveVariant() {
     if (editingVariant.value?.id) {
       savedVariant = await api.actualizarVariante<Variante>(props.product.id, editingVariant.value.id, {
         nombre: form.nombre.trim(),
+        existencia: form.existencia,
         urlFoto: form.urlFoto || undefined,
-        precio: form.precioVenta,
-        monedaVenta: form.monedaVenta,
       })
     } else {
       savedVariant = await api.crearVariante<Variante>(props.product.id, {
         nombre: form.nombre.trim(),
         existencia: form.existencia,
         urlFoto: form.urlFoto || undefined,
-        precio: form.precioVenta,
-        monedaVenta: form.monedaVenta,
       })
       editingVariant.value = savedVariant
     }
@@ -135,8 +130,6 @@ async function saveVariant() {
     form.nombre = ''
     form.existencia = 0
     form.urlFoto = ''
-    form.precioVenta = props.product.precioVenta
-    form.monedaVenta = props.product.monedaVenta || 'CUP'
     editingVariant.value = null
     await loadVariants(props.product.id)
     emit('updated')
@@ -185,11 +178,10 @@ async function confirmDeleteVariant() {
         <p v-else-if="!variants.length" class="empty">Este producto todavía no tiene variantes.</p>
         <div v-else class="table-wrap">
           <table>
-            <thead><tr><th>Variante</th><th>Precio de venta</th><th>Stock</th><th>Acciones</th></tr></thead>
+            <thead><tr><th>Variante</th><th>Stock</th><th>Acciones</th></tr></thead>
             <tbody>
               <tr v-for="variant in variants" :key="variant.id">
                 <td><div class="variant-name"><img v-if="variant.urlFoto" :src="variant.urlFoto" :alt="variant.nombre" /><PackagePlus v-else :size="18" /><strong>{{ variant.nombre }}</strong></div></td>
-                <td>{{ variant.precio }} {{ variant.monedaVenta || 'CUP' }}</td>
                 <td>{{ variant.existencia }}</td>
                 <td><div class="variant-actions"><button class="variant-info-button" type="button" :aria-label="`Ver información de ${variant.nombre}`" title="Ver información" @click="detailVariant = variant"><Eye :size="15" /></button><button class="edit-button" type="button" :aria-label="`Editar ${variant.nombre}`" title="Editar variante" @click="openEditModal(variant)"><Pencil :size="15" /></button><button class="delete-button" type="button" :aria-label="`Eliminar ${variant.nombre}`" title="Eliminar variante" :disabled="deletingVariantId === variant.id" @click="deleteVariant(variant)"><LoaderCircle v-if="deletingVariantId === variant.id" class="spin" :size="15" /><Trash2 v-else :size="15" /></button></div></td>
               </tr>
@@ -206,7 +198,6 @@ async function confirmDeleteVariant() {
         :title="detailVariant.nombre"
         :fields="[
           { label: 'Variante', value: detailVariant.nombre },
-          { label: 'Precio de venta', value: `${detailVariant.precio} ${detailVariant.monedaVenta || 'CUP'}` },
           { label: 'Stock', value: detailVariant.existencia },
           { label: 'Stock mínimo', value: detailVariant.existenciaMinima },
           { label: 'Estado', value: detailVariant.activa ? 'Activa' : 'Inactiva' },
@@ -222,15 +213,8 @@ async function confirmDeleteVariant() {
         </header>
         <div class="fields">
           <label>Nombre de la variante<input v-model="form.nombre" required maxlength="150" placeholder="Ej. Gallina ponedora" /></label>
-          <label v-if="!editingVariant">Stock inicial<input v-model.number="form.existencia" required type="number" min="0" step="1" /></label>
+          <label>{{ editingVariant ? 'Stock' : 'Stock inicial' }}<input v-model.number="form.existencia" required type="number" min="0" step="1" /></label>
           <p v-if="!editingVariant && !variants.length && props.product.stockActual > 0" class="info">El stock general actual se incluirá en esta primera variante.</p>
-          <label>Precio de venta<input v-model.number="form.precioVenta" required type="number" min="0" step="0.01" /></label>
-          <label>Moneda del precio de venta
-            <select v-model="form.monedaVenta">
-              <option value="CUP">CUP</option>
-              <option value="USD">USD</option>
-            </select>
-          </label>
           <input ref="imageInput" class="file-input" type="file" accept="image/*" :disabled="uploadingImage" @change="selectImage" />
           <button class="image-button" type="button" :disabled="uploadingImage" @click="imageInput?.click()">
             <LoaderCircle v-if="uploadingImage" class="spin" :size="16" />

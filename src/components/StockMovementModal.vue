@@ -1,25 +1,19 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { LoaderCircle, Save, X } from 'lucide-vue-next'
-import type { Moneda, Producto, TipoMovimiento, Variante } from '../api.ts'
+import type { Producto, TipoMovimiento, Variante } from '../api.ts'
 
 const props = defineProps<{ product: Producto | null; variants: Variante[]; variantsLoading: boolean; variantsError: string; saving: boolean; error: string }>()
 const emit = defineEmits<{
   (e: 'close'): void
-  (e: 'save', value: { tipo: TipoMovimiento; cantidad: number; nuevoStock: number; entrada: boolean; varianteId?: number; precioVenta?: number; monedaVenta?: Moneda }): void
+  (e: 'save', value: { tipo: TipoMovimiento; cantidad: number; nuevoStock: number; entrada: boolean; varianteId?: number }): void
 }>()
-const form = ref<{ tipo: TipoMovimiento; cantidad: number; nuevoStock: number; entrada: boolean; varianteId: number | null; precioVenta: number | null; monedaVenta: Moneda }>({ tipo: 'COMPRA', cantidad: 1, nuevoStock: 0, entrada: true, varianteId: null, precioVenta: null, monedaVenta: 'CUP' })
-const needsVariantPrice = computed(() => !props.variants.length
-  && (form.value.tipo === 'COMPRA'
-    || (form.value.tipo === 'AJUSTE_INVENTARIO' && form.value.nuevoStock > (props.product?.stockActual ?? 0))))
+const form = ref<{ tipo: TipoMovimiento; cantidad: number; nuevoStock: number; entrada: boolean; varianteId: number | null }>({ tipo: 'COMPRA', cantidad: 1, nuevoStock: 0, entrada: true, varianteId: null })
 
 function save() {
-  if (needsVariantPrice.value && (form.value.precioVenta === null || form.value.precioVenta < 0)) return
   emit('save', {
     ...form.value,
     varianteId: form.value.varianteId ?? undefined,
-    precioVenta: needsVariantPrice.value ? form.value.precioVenta ?? undefined : undefined,
-    monedaVenta: needsVariantPrice.value ? form.value.monedaVenta : undefined,
   })
 }
 
@@ -30,8 +24,6 @@ watch([() => props.product, () => props.variants], ([product, variants]) => {
     nuevoStock: variants.length ? variants[0].existencia : product?.stockActual || 0,
     entrada: true,
     varianteId: variants[0]?.id ?? null,
-    precioVenta: null,
-    monedaVenta: product?.monedaVenta || 'CUP',
   }
 }, { immediate: true })
 </script>
@@ -48,16 +40,6 @@ watch([() => props.product, () => props.variants], ([product, variants]) => {
         <label>Tipo de movimiento<select v-model="form.tipo"><option value="COMPRA">Compra</option><option value="VENTA">Venta</option><option value="AJUSTE_INVENTARIO">Ajuste</option><option value="MERMA">Merma</option><option value="REGALO">Regalo</option></select></label>
         <label v-if="form.tipo === 'AJUSTE_INVENTARIO'">Nueva existencia<input v-model.number="form.nuevoStock" type="number" min="0" step="1" required /></label>
         <label v-else>Cantidad<input v-model.number="form.cantidad" type="number" min="1" step="1" required /></label>
-        <template v-if="needsVariantPrice">
-          <p class="info">Al aumentar el stock se creará una variante con el nombre del producto.</p>
-          <label>Precio de venta de la variante<input v-model.number="form.precioVenta" type="number" min="0" step="0.01" required /></label>
-          <label>Moneda del precio de venta
-            <select v-model="form.monedaVenta">
-              <option value="CUP">CUP</option>
-              <option value="USD">USD</option>
-            </select>
-          </label>
-        </template>
       </div>
       <p v-if="props.error" class="error">{{ props.error }}</p>
       <footer class="actions"><button class="secondary" type="button" @click="emit('close')">Cancelar</button><button class="primary" type="submit" :disabled="props.saving || props.variantsLoading || Boolean(props.variantsError)"><LoaderCircle v-if="props.saving" class="spin" :size="16" /><Save v-else :size="16" /> {{ props.saving ? 'Guardando...' : 'Guardar movimiento' }}</button></footer>

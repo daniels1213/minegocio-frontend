@@ -21,7 +21,7 @@ export function normalizarGaleria(fotos: unknown): FotoGaleria[] {
 }
 export interface VarianteCatalogo { id: number; nombre: string; urlFoto?: string; precio?: number | string; monedaVenta?: Moneda; visible?: boolean }
 export interface CatalogoProducto { productoId?: number; varianteId?: number; comboId?: number; nombre: string; descripcion?: string; orden: number; urlFoto?: string; precioVenta?: number | string; monedaVenta?: Moneda; visible?: boolean; componentes?: ComponenteCombo[]; variantes?: VarianteCatalogo[] }
-export interface Variante { id?: number; productoId: number; codigo: string; nombre: string; urlFoto?: string; precio: number; monedaVenta?: Moneda; existencia: number; existenciaMinima: number; activa: boolean }
+export interface Variante { id?: number; productoId: number; codigo: string; nombre: string; urlFoto?: string; precio?: number; monedaVenta?: Moneda; existencia: number; existenciaMinima: number; activa: boolean }
 export interface ComponenteCombo { productoId: number; productoNombre?: string; urlFoto?: string; cantidad: number; varianteId?: number }
 export interface Combo { id?: number; nombre: string; urlFoto?: string; precio: number; componentes: ComponenteCombo[] }
 export interface DetallePedido { id?: number; productoId?: number; comboId?: number; nombre?: string; varianteId?: number; cantidad: number; precioUnitario: number; subtotal?: number; monedaVenta?: Moneda; componentes?: ComponenteCombo[] }
@@ -174,11 +174,11 @@ export const api = {
 	}),
 	movimientos: <T>(queryParams?: string) => request<T[]>(`/api/inventario/movimientos${queryParams ? '?' + queryParams : ''}`),
 	variantesProducto: <T>(productoId: number) => request<T[]>(`/api/productos/${productoId}/variantes`),
-	crearVariante: <T>(productoId: number, payload: { nombre: string; existencia: number; urlFoto?: string; precio?: number; monedaVenta?: Moneda }) => request<T>(`/api/productos/${productoId}/variantes`, {
+	crearVariante: <T>(productoId: number, payload: { nombre: string; existencia: number; urlFoto?: string }) => request<T>(`/api/productos/${productoId}/variantes`, {
 		method: 'POST',
 		body: JSON.stringify(payload),
 	}),
-	actualizarVariante: <T>(productoId: number, varianteId: number, payload: { nombre: string; urlFoto?: string; precio?: number; monedaVenta?: Moneda }) => request<T>(`/api/productos/${productoId}/variantes/${varianteId}`, {
+	actualizarVariante: <T>(productoId: number, varianteId: number, payload: { nombre: string; existencia?: number; urlFoto?: string }) => request<T>(`/api/productos/${productoId}/variantes/${varianteId}`, {
 		method: 'PUT',
 		body: JSON.stringify(payload),
 	}),

@@ -1,16 +1,16 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { ImagePlus, LoaderCircle, Save, X } from 'lucide-vue-next'
-import type { Producto } from '../api.ts'
+import type { Moneda, Producto } from '../api.ts'
 import { uploadCloudinaryImage } from '../cloudinary.ts'
 import ImageCropModal from './ImageCropModal.vue'
 
 const props = defineProps<{ product: Producto | null; saving: boolean; error: string }>()
 const emit = defineEmits<{
   (e: 'close'): void
-  (e: 'save', value: { nombre: string; descripcion: string; urlFoto: string }): void
+  (e: 'save', value: { nombre: string; descripcion: string; urlFoto: string; precioVenta: number; monedaVenta: Moneda }): void
 }>()
-const form = ref({ nombre: '', descripcion: '', urlFoto: '' })
+const form = ref<{ nombre: string; descripcion: string; urlFoto: string; precioVenta: number; monedaVenta: Moneda }>({ nombre: '', descripcion: '', urlFoto: '', precioVenta: 0, monedaVenta: 'CUP' })
 const imageInput = ref<HTMLInputElement | null>(null)
 const uploadingImage = ref(false)
 const imageError = ref('')
@@ -45,6 +45,8 @@ watch(() => props.product, (product) => {
     nombre: product?.nombre || '',
     descripcion: product?.descripcion || '',
     urlFoto: product?.urlFoto || '',
+    precioVenta: product?.precioVenta || 0,
+    monedaVenta: product?.monedaVenta || 'CUP',
   }
 }, { immediate: true })
 </script>
@@ -56,6 +58,12 @@ watch(() => props.product, (product) => {
       <div class="fields">
         <label>Nombre<input v-model="form.nombre" required type="text" /></label>
         <label>Descripción<textarea v-model="form.descripcion" rows="3" /></label>
+        <div class="price-grid">
+          <label>Precio de venta<input v-model.number="form.precioVenta" required type="number" min="0" step="0.01" /></label>
+          <label>Moneda
+            <select v-model="form.monedaVenta"><option value="CUP">CUP</option><option value="USD">USD</option></select>
+          </label>
+        </div>
         <div class="image-field">
           <input ref="imageInput" class="file-input" type="file" accept="image/*" :disabled="uploadingImage" @change="selectImage" />
           <button class="image-button" type="button" :disabled="uploadingImage" @click="imageInput?.click()">
@@ -84,7 +92,7 @@ watch(() => props.product, (product) => {
 .icon-close{display:grid;place-items:center;width:36px;height:36px;flex:0 0 auto;border:0;border-radius:8px;background:#fff6f0;color:#c65b19}
 .fields{display:grid;gap:14px;margin:20px 0}
 .fields label{display:grid;gap:7px;color:#333;font-size:13px;font-weight:700}
-.fields input,.fields textarea,.fields select{width:100%;min-width:0;padding:11px;border:1px solid #e8e8e8;border-radius:8px;color:#171717;font:inherit;font-weight:400;background:#fff}
+.fields input,.fields textarea,.fields select{width:100%;min-width:0;padding:11px;border:1px solid #e8e8e8;border-radius:8px;color:#171717;font:inherit;font-weight:400;background:#fff}.price-grid{display:grid;grid-template-columns:minmax(0,1fr) 180px;gap:12px}
 .fields textarea{resize:vertical}
 .image-field{display:grid;gap:8px;color:#333;font-size:13px;font-weight:700}
 .file-input{display:none}
@@ -95,5 +103,5 @@ watch(() => props.product, (product) => {
 .primary{background:#171717;color:#fff}.secondary{background:#fff6f0;color:#c65b19}
 .error{color:#a8584e}
 .spin{animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
-@media(max-width:560px){.modal{padding:18px}.actions{flex-direction:column-reverse}.actions button{width:100%}}
+@media(max-width:560px){.modal{padding:18px}.price-grid{grid-template-columns:1fr}.actions{flex-direction:column-reverse}.actions button{width:100%}}
 </style>

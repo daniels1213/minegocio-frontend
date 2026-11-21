@@ -136,7 +136,7 @@ function openEdit(product: Producto) {
   modalError.value = ''
 }
 
-async function saveInfo(form: { nombre: string; descripcion: string; urlFoto: string }) {
+async function saveInfo(form: { nombre: string; descripcion: string; urlFoto: string; precioVenta: number; monedaVenta: Moneda }) {
   if (!editingProduct.value?.id || !form.nombre.trim()) {
     modalError.value = 'El nombre es obligatorio.'
     return
@@ -148,6 +148,8 @@ async function saveInfo(form: { nombre: string; descripcion: string; urlFoto: st
       nombre: form.nombre.trim(),
       descripcion: form.descripcion.trim(),
       urlFoto: form.urlFoto.trim() || null,
+      precioVenta: form.precioVenta,
+      monedaVenta: form.monedaVenta,
     })
     editingProduct.value = null
     await load()
@@ -201,7 +203,7 @@ async function openMovement(product: Producto) {
   }
 }
 
-async function saveMovement(form: { tipo: TipoMovimiento; cantidad: number; nuevoStock: number; entrada: boolean; varianteId?: number | null; precioVenta?: number; monedaVenta?: Moneda }) {
+async function saveMovement(form: { tipo: TipoMovimiento; cantidad: number; nuevoStock: number; entrada: boolean; varianteId?: number | null }) {
   if (!movementProduct.value?.id) return
 
   // Validar stock del lado del cliente antes de enviar
@@ -228,8 +230,6 @@ async function saveMovement(form: { tipo: TipoMovimiento; cantidad: number; nuev
       nuevoStock: form.nuevoStock,
       entrada: form.entrada,
       varianteId: form.varianteId ?? undefined,
-      precioVenta: form.precioVenta,
-      monedaVenta: form.monedaVenta,
     })
     movementProduct.value = null
     await load()
@@ -277,7 +277,7 @@ watch(() => props.usuarioId, (usuarioId) => {
     <div v-if="loading" class="state"><RefreshCw :size="24" class="spin" /> Cargando productos...</div>
     <div v-else-if="!products.length" class="state"><Package :size="30" /><p>Aún no hay productos.</p><button class="primary" type="button" @click="showProductModal = true"><Plus :size="16" /> Crear producto</button></div>
     <div v-else-if="!filteredProducts.length" class="state"><Search :size="26" /><p>No hay productos que coincidan con “{{ search }}”.</p></div>
-    <div v-else class="table-wrap"><table><thead><tr><th>Nombre</th><th>Stock</th><th>Estado</th><th>Acciones</th></tr></thead><tbody><tr v-for="product in filteredProducts" :key="product.id"><td><div class="product-cell"><img v-if="product.urlFoto" :src="product.urlFoto" :alt="`Foto de ${product.nombre}`" loading="lazy" /><Package v-else :size="20" /><strong>{{ product.nombre }}</strong></div></td><td>{{ product.stockActual }}</td><td><span :class="product.stockActual <= 0 ? 'low' : 'ok'">{{ product.stockActual <= 0 ? 'Agotado' : 'Disponible' }}</span></td><td><div class="row-actions"><button class="add-product-action" type="button" title="Agregar a catálogo" aria-label="Agregar a catálogo" :disabled="!usuarioId || catalogsLoading || Boolean(catalogsError)" @click="productToCatalog = product"><Plus :size="16" /></button><button type="button" title="Variantes" :aria-label="`Variantes: ${product.nombre}`" @click="variantProduct = product"><PackagePlus :size="16" /></button><button type="button" title="Registrar movimiento de inventario" :aria-label="`Movimiento de inventario: ${product.nombre}`" @click="openMovement(product)"><ArrowDownUp :size="16" /></button><button type="button" title="Ver o editar información" :aria-label="`Ver o editar información de ${product.nombre}`" @click="detailProduct = product"><Eye :size="16" /></button><button class="delete-product-action" type="button" :title="`Eliminar ${product.nombre}`" :aria-label="`Eliminar permanentemente ${product.nombre}`" :disabled="deletingProductId === product.id" @click="deleteProduct(product)"><RefreshCw v-if="deletingProductId === product.id" class="spin" :size="16" /><Trash2 v-else :size="16" /></button></div></td></tr></tbody></table></div>
+    <div v-else class="table-wrap"><table><thead><tr><th>Nombre</th><th>Precio de venta</th><th>Stock</th><th>Estado</th><th>Acciones</th></tr></thead><tbody><tr v-for="product in filteredProducts" :key="product.id"><td><div class="product-cell"><img v-if="product.urlFoto" :src="product.urlFoto" :alt="`Foto de ${product.nombre}`" loading="lazy" /><Package v-else :size="20" /><strong>{{ product.nombre }}</strong></div></td><td>{{ product.precioVenta }} {{ product.monedaVenta || 'CUP' }}</td><td>{{ product.stockActual }}</td><td><span :class="product.stockActual <= 0 ? 'low' : 'ok'">{{ product.stockActual <= 0 ? 'Agotado' : 'Disponible' }}</span></td><td><div class="row-actions"><button class="add-product-action" type="button" title="Agregar a catálogo" aria-label="Agregar a catálogo" :disabled="!usuarioId || catalogsLoading || Boolean(catalogsError)" @click="productToCatalog = product"><Plus :size="16" /></button><button type="button" title="Variantes" :aria-label="`Variantes: ${product.nombre}`" @click="variantProduct = product"><PackagePlus :size="16" /></button><button type="button" title="Registrar movimiento de inventario" :aria-label="`Movimiento de inventario: ${product.nombre}`" @click="openMovement(product)"><ArrowDownUp :size="16" /></button><button type="button" title="Ver o editar información" :aria-label="`Ver o editar información de ${product.nombre}`" @click="detailProduct = product"><Eye :size="16" /></button><button class="delete-product-action" type="button" :title="`Eliminar ${product.nombre}`" :aria-label="`Eliminar permanentemente ${product.nombre}`" :disabled="deletingProductId === product.id" @click="deleteProduct(product)"><RefreshCw v-if="deletingProductId === product.id" class="spin" :size="16" /><Trash2 v-else :size="16" /></button></div></td></tr></tbody></table></div>
     <div v-if="showMovementHistory" class="history-modal-layer" @click.self="showMovementHistory = false">
       <section class="history-modal" role="dialog" aria-modal="true" aria-labelledby="movement-history-title">
         <header class="history-heading">

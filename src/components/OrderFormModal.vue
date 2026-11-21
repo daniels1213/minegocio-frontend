@@ -523,7 +523,7 @@ onMounted(() => void loadOptions())
             <span>Variante de {{ products.find((item) => item.id === line.productoId)?.nombre }}</span>
             <select v-model.number="line.variantes[line.productoId]" required>
               <option :value="null">Selecciona la variante</option>
-              <option v-for="variant in variantOptions[line.productoId]" :key="variant.id" :value="variant.id">{{ variant.nombre }} · {{ variant.precio }} {{ variant.monedaVenta || 'CUP' }}</option>
+              <option v-for="variant in variantOptions[line.productoId]" :key="variant.id" :value="variant.id">{{ variant.nombre }} · {{ products.find((product) => product.id === line.productoId)?.precioVenta }} {{ products.find((product) => product.id === line.productoId)?.monedaVenta || 'CUP' }}</option>
             </select>
           </div>
           <div v-if="loadingVariants.length" class="loading-variants"><LoaderCircle class="spin" :size="14" /> Cargando variantes...</div>

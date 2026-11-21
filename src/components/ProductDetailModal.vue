@@ -50,6 +50,11 @@ watch(() => props.product, async (product) => {
         <h3 id="inventory-info-title" class="section-title">Inventario</h3>
         <div class="inventory-stats">
           <div class="stat-card">
+            <span class="field-label">Precio de venta</span>
+            <strong>{{ props.product.precioVenta }} {{ props.product.monedaVenta || 'CUP' }}</strong>
+            <span class="stat-caption">precio del producto</span>
+          </div>
+          <div class="stat-card">
             <span class="field-label">Existencia actual</span>
             <strong>{{ props.product.stockActual }}</strong>
             <span class="stat-caption">unidades</span>

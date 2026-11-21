@@ -87,8 +87,8 @@ const productGroups = computed(() => {
 
             urlFoto: variant.urlFoto,
 
-            precio: variant.precio,
-            monedaVenta: variant.monedaVenta,
+            precio: product.precioVenta,
+            monedaVenta: product.monedaVenta,
 
           })
 
@@ -108,8 +108,8 @@ const productGroups = computed(() => {
 
             descripcion: variant.descripcion || '',
 
-            precio: variant.precioVenta,
-            monedaVenta: variant.monedaVenta,
+            precio: product.precioVenta,
+            monedaVenta: product.monedaVenta,
 
           })
 
